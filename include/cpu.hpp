@@ -6,7 +6,7 @@
 #include "types.hpp"
 
 class CPU {
-public:ё
+public:
     CPU(Config cfg, Memory& mem);
 
     void run(uint64_t maxSteps = 0);
