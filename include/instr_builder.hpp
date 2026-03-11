@@ -3,7 +3,7 @@
 #include <vector>
 
 #include "isa.hpp"
-#include "memory.hpp"
+#include "memory_model.hpp"
 #include "types.hpp"
 
 namespace InstrBuilder {
@@ -43,6 +43,11 @@ inline Word B(int16_t offset, uint8_t rs2, uint8_t rs1, uint8_t funct3, uint8_t 
            (Word(funct3) << 12) | (b4_1 << 8) | (b11 << 7) | Word(opcode);
 }
 
+// U-type: LUI, AUIPC
+inline Word U(int32_t imm, uint8_t rd, uint8_t opcode) {
+    return (static_cast<Word>(imm) & 0xFFFFF000u) | (Word(rd) << 7) | Word(opcode);
+}
+
 // J-type: rd = PC+4 ; PC += offset  (jal)
 inline Word J(int32_t offset, uint8_t rd, uint8_t opcode) {
     Word o      = static_cast<Word>(offset) & 0x1FFFFEu;
@@ -54,50 +59,34 @@ inline Word J(int32_t offset, uint8_t rd, uint8_t opcode) {
            Word(opcode);
 }
 
-// Pseudo-instructions — shortcuts for most common operations
-
-// ADDI rd, rs1, imm
+// Pseudo-instructions
 inline Word ADDI(uint8_t rd, uint8_t rs1, int16_t imm) {
     return I(imm, rs1, F3_ADD_SUB, rd, OP_OP_IMM);
 }
-
-// ADD rd, rs1, rs2
 inline Word ADD(uint8_t rd, uint8_t rs1, uint8_t rs2) {
     return R(F7_NORMAL, rs2, rs1, F3_ADD_SUB, rd, OP_OP);
 }
-
-// SUB rd, rs1, rs2
 inline Word SUB(uint8_t rd, uint8_t rs1, uint8_t rs2) {
     return R(F7_ALT, rs2, rs1, F3_ADD_SUB, rd, OP_OP);
 }
-
-// MUL rd, rs1, rs2  (M extension)
 inline Word MUL(uint8_t rd, uint8_t rs1, uint8_t rs2) {
     return R(F7_MEXT, rs2, rs1, F3_MUL, rd, OP_OP);
 }
-
-// LW rd, offset(rs1)
 inline Word LW(uint8_t rd, uint8_t rs1, int16_t offset) {
     return I(offset, rs1, F3_LW, rd, OP_LOAD);
 }
-
-// SW rs2, offset(rs1)
 inline Word SW(uint8_t rs2, uint8_t rs1, int16_t offset) {
     return S(offset, rs2, rs1, F3_SW, OP_STORE);
 }
-
-// JAL rd, offset
 inline Word JAL(uint8_t rd, int32_t offset) {
     return J(offset, rd, OP_JAL);
 }
-
-// Program termination marker
 inline Word HALT() {
     return 0x00000000u;
 }
 
-// Load instruction vector into memory starting at base address
-inline void loadProgram(Memory& mem, const std::vector<Word>& prog, Addr base = 0) {
+// Load instruction vector into MemoryModel
+inline void loadProgram(MemoryModel& mem, const std::vector<Word>& prog, Addr base = 0) {
     std::vector<uint8_t> bytes;
     bytes.reserve(prog.size() * 4);
     for (Word w : prog) {

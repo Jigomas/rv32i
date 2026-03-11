@@ -35,9 +35,9 @@ endif()
 add_library(rv32i_lib STATIC
     src/alu.cpp
     src/decoder.cpp
-    src/memory.cpp
-    src/registers.cpp
-    src/cpu.cpp
+    src/memory_model.cpp
+    src/register_file.cpp
+    src/rv_model.cpp
 )
 target_include_directories(rv32i_lib PUBLIC include)
 
