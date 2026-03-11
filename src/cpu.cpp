@@ -1,5 +1,6 @@
 #include "../include/cpu.hpp"
 
+#include <cassert>
 #include <iomanip>
 #include <iostream>
 #include <stdexcept>
@@ -12,17 +13,26 @@ CPU::CPU(Config cfg, Memory& mem)
     regs_.setPC(0u);
 }
 
-void CPU::run(uint64_t maxSteps) {
-    uint64_t steps = 0;
-    while (!halted_) {
-        step();
-        if (maxSteps > 0 && ++steps >= maxSteps)
-            break;
-    }
-    std::cout << "[CPU] Executed " << instrCount_ << " instructions.\n";
+CPU::CPU(CPU&& other) noexcept
+    : config_(other.config_),
+      mem_(other.mem_)  // reference stays the same
+      ,
+      regs_(std::move(other.regs_)),
+      halted_(other.halted_),
+      instrCount_(other.instrCount_),
+      debugMode_(other.debugMode_) {
+    // leave moved-from in halted state
+    other.halted_ = true;
 }
 
-void CPU::step() {
+void CPU::setPC(Word addr) {
+    assert(!halted_ && "CPU::setPC — CPU is halted");
+    regs_.setPC(addr);
+}
+
+void CPU::execute() {
+    assert(!halted_ && "CPU::execute — called on halted CPU");
+
     if (halted_)
         return;
 
@@ -31,14 +41,14 @@ void CPU::step() {
     Word raw;
     try {
         raw = mem_.loadWord(pc);
-    } catch (const std::exception& e) {
-        std::cerr << "[CPU] Fetch fault at PC=0x" << std::hex << pc << ": " << e.what() << "\n";
-        halted_ = true;
-        return;
+    } catch (const std::out_of_range& e) {
+        throw std::runtime_error(std::string("CPU: fetch fault at PC=0x") + std::to_string(pc) +
+                                 ": " + e.what());
     }
 
     if (raw == 0u) {
-        std::cout << "[CPU] HALT at PC=0x" << std::hex << pc << std::dec << "\n";
+        if (debugMode_)
+            std::cout << "[CPU] HALT sentinel at PC=0x" << std::hex << pc << std::dec << "\n";
         halted_ = true;
         return;
     }
@@ -48,33 +58,52 @@ void CPU::step() {
         std::cout << "[PC=0x" << std::hex << std::setw(8) << std::setfill('0') << pc << std::dec
                   << "] " << instr.toString() << "\n";
 
-    if (!execute(instr))
+    const bool pcModified = executeInstr(instr);
+
+    if (!pcModified)
         regs_.advancePC();
 
     ++instrCount_;
 }
 
-bool CPU::execute(const DecodedInstr& d) {
+void CPU::run(uint64_t maxSteps) {
+    uint64_t steps = 0;
+    while (!halted_) {
+        execute();
+        if (maxSteps > 0 && ++steps >= maxSteps)
+            break;
+    }
+    if (debugMode_)
+        std::cout << "[CPU] Executed " << instrCount_ << " instructions.\n";
+}
+
+bool CPU::executeInstr(const DecodedInstr& d) {
     using namespace ISA;
 
     switch (d.opcode) {
 
+        // LUI: rd = imm[31:12]
         case OP_LUI:
             regs_.write(d.rd, static_cast<Word>(d.imm));
             return false;
 
+        // AUIPC: rd = PC + imm[31:12]
         case OP_AUIPC:
             regs_.write(d.rd, regs_.getPC() + static_cast<Word>(d.imm));
             return false;
 
+        // JAL: rd = PC+4 ; PC = PC + imm
         case OP_JAL: {
             const Word ret    = regs_.getPC() + 4u;
             const Word target = regs_.getPC() + static_cast<Word>(d.imm);
+            // [ASSERT] JAL target must be 4-byte aligned
+            assert((target & 0x3u) == 0 && "JAL: target not 4-byte aligned");
             regs_.write(d.rd, ret);
             regs_.setPC(target);
             return true;
         }
 
+        // JALR: rd = PC+4 ; PC = (rs1 + imm) & ~1
         case OP_JALR: {
             const Word ret    = regs_.getPC() + 4u;
             const Word target = (regs_.read(d.rs1) + static_cast<Word>(d.imm)) & ~1u;
@@ -94,20 +123,20 @@ bool CPU::execute(const DecodedInstr& d) {
         case OP_OP:
             return executeOp(d);
 
+        // FENCE — NOP in single-threaded model without cache
         case OP_MISC_MEM:
             return false;
 
+        // SYSTEM (ECALL/EBREAK) — not implemented, halt
         case OP_SYSTEM:
-            std::cout << "[CPU] SYSTEM instruction at PC=0x" << std::hex << regs_.getPC()
-                      << " — HALTED\n";
+            if (debugMode_)
+                std::cout << "[CPU] SYSTEM at PC=0x" << std::hex << regs_.getPC() << " — HALTED\n";
             halted_ = true;
             return true;
 
         default:
-            std::cerr << "[CPU] Illegal opcode 0x" << std::hex << static_cast<int>(d.opcode)
-                      << " at PC=0x" << regs_.getPC() << std::dec << "\n";
-            halted_ = true;
-            return true;
+            throw std::runtime_error("CPU: illegal opcode 0x" + std::to_string(d.opcode) +
+                                     " at PC=0x" + std::to_string(regs_.getPC()));
     }
 }
 
@@ -137,11 +166,13 @@ bool CPU::executeBranch(const DecodedInstr& d) {
             taken = (r1 >= r2);
             break;
         default:
-            throw std::runtime_error("CPU: unknown branch funct3");
+            throw std::runtime_error("CPU: unknown branch funct3=0x" + std::to_string(d.funct3));
     }
 
     if (taken) {
-        regs_.setPC(regs_.getPC() + static_cast<Word>(d.imm));
+        const Word target = regs_.getPC() + static_cast<Word>(d.imm);
+        assert((target & 0x3u) == 0 && "BRANCH: target not 4-byte aligned");
+        regs_.setPC(target);
         return true;
     }
     return false;
@@ -152,24 +183,29 @@ bool CPU::executeLoad(const DecodedInstr& d) {
     const Addr addr = static_cast<Addr>(static_cast<SWord>(regs_.read(d.rs1)) + d.imm);
 
     Word result = 0u;
-    switch (d.funct3) {
-        case F3_LB:
-            result = static_cast<Word>(ISA::signExtend(mem_.loadByte(addr), 8));
-            break;
-        case F3_LH:
-            result = static_cast<Word>(ISA::signExtend(mem_.loadHalf(addr), 16));
-            break;
-        case F3_LW:
-            result = mem_.loadWord(addr);
-            break;
-        case F3_LBU:
-            result = static_cast<Word>(mem_.loadByte(addr));
-            break;
-        case F3_LHU:
-            result = static_cast<Word>(mem_.loadHalf(addr));
-            break;
-        default:
-            throw std::runtime_error("CPU: unknown load funct3");
+    try {
+        switch (d.funct3) {
+            case F3_LB:
+                result = static_cast<Word>(ISA::signExtend(mem_.loadByte(addr), 8));
+                break;
+            case F3_LH:
+                result = static_cast<Word>(ISA::signExtend(mem_.loadHalf(addr), 16));
+                break;
+            case F3_LW:
+                result = mem_.loadWord(addr);
+                break;
+            case F3_LBU:
+                result = static_cast<Word>(mem_.loadByte(addr));
+                break;
+            case F3_LHU:
+                result = static_cast<Word>(mem_.loadHalf(addr));
+                break;
+            default:
+                throw std::runtime_error("CPU: unknown load funct3=0x" + std::to_string(d.funct3));
+        }
+    } catch (const std::out_of_range& e) {
+        throw std::runtime_error(std::string("CPU: load fault at addr=0x") + std::to_string(addr) +
+                                 ": " + e.what());
     }
 
     regs_.write(d.rd, result);
@@ -181,18 +217,23 @@ bool CPU::executeStore(const DecodedInstr& d) {
     const Addr addr = static_cast<Addr>(static_cast<SWord>(regs_.read(d.rs1)) + d.imm);
     const Word data = regs_.read(d.rs2);
 
-    switch (d.funct3) {
-        case F3_SB:
-            mem_.storeByte(addr, static_cast<uint8_t>(data & 0xFFu));
-            break;
-        case F3_SH:
-            mem_.storeHalf(addr, static_cast<uint16_t>(data & 0xFFFFu));
-            break;
-        case F3_SW:
-            mem_.storeWord(addr, data);
-            break;
-        default:
-            throw std::runtime_error("CPU: unknown store funct3");
+    try {
+        switch (d.funct3) {
+            case F3_SB:
+                mem_.storeByte(addr, static_cast<uint8_t>(data & 0xFFu));
+                break;
+            case F3_SH:
+                mem_.storeHalf(addr, static_cast<uint16_t>(data & 0xFFFFu));
+                break;
+            case F3_SW:
+                mem_.storeWord(addr, data);
+                break;
+            default:
+                throw std::runtime_error("CPU: unknown store funct3=0x" + std::to_string(d.funct3));
+        }
+    } catch (const std::out_of_range& e) {
+        throw std::runtime_error(std::string("CPU: store fault at addr=0x") + std::to_string(addr) +
+                                 ": " + e.what());
     }
     return false;
 }
@@ -230,7 +271,7 @@ bool CPU::executeOpImm(const DecodedInstr& d) {
             result = ALU::execute(ALU::Op::AND, rs1v, immv);
             break;
         default:
-            throw std::runtime_error("CPU: unknown OP_IMM funct3");
+            throw std::runtime_error("CPU: unknown OP_IMM funct3=0x" + std::to_string(d.funct3));
     }
 
     regs_.write(d.rd, result);
@@ -244,9 +285,11 @@ bool CPU::executeOp(const DecodedInstr& d) {
     Word       result = 0u;
 
     if (d.funct7 == F7_MEXT) {
-        if (!config_.hasExtension(Config::EXT_M))
-            throw std::runtime_error("CPU: M-extension disabled");
-
+        if (!config_.hasExtension(Config::EXT_M)) {
+            throw std::runtime_error("CPU: M-extension instruction at PC=0x" +
+                                     std::to_string(regs_.getPC()) +
+                                     " but EXT_M is disabled in Config");
+        }
         switch (d.funct3) {
             case F3_MUL:
                 result = ALU::execute(ALU::Op::MUL, rs1v, rs2v);
@@ -273,7 +316,7 @@ bool CPU::executeOp(const DecodedInstr& d) {
                 result = ALU::execute(ALU::Op::REMU, rs1v, rs2v);
                 break;
             default:
-                throw std::runtime_error("CPU: unknown M-ext funct3");
+                throw std::runtime_error("CPU: unknown M-ext funct3=0x" + std::to_string(d.funct3));
         }
     } else {
         switch (d.funct3) {
@@ -304,7 +347,7 @@ bool CPU::executeOp(const DecodedInstr& d) {
                 result = ALU::execute(ALU::Op::AND, rs1v, rs2v);
                 break;
             default:
-                throw std::runtime_error("CPU: unknown OP funct3");
+                throw std::runtime_error("CPU: unknown OP funct3=0x" + std::to_string(d.funct3));
         }
     }
 

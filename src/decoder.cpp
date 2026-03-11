@@ -1,5 +1,6 @@
 #include "../include/decoder.hpp"
 
+#include <cassert>
 #include <iomanip>
 #include <sstream>
 
@@ -18,6 +19,8 @@ std::string DecodedInstr::toString() const {
 DecodedInstr Decoder::decode(Word raw) {
     using namespace ISA;
 
+    assert(raw != 0u && "Decoder::decode — raw=0 is the HALT sentinel, not a valid instruction");
+
     DecodedInstr d;
     d.raw    = raw;
     d.opcode = getOpcode(raw);
@@ -35,25 +38,23 @@ DecodedInstr Decoder::decode(Word raw) {
         case OP_SYSTEM:
             d.imm = decodeImmI(raw);
             break;
-
         case OP_STORE:
             d.imm = decodeImmS(raw);
             break;
-
         case OP_BRANCH:
             d.imm = decodeImmB(raw);
             break;
-
         case OP_LUI:
         case OP_AUIPC:
             d.imm = static_cast<SWord>(decodeImmU(raw));
             break;
-
         case OP_JAL:
             d.imm = decodeImmJ(raw);
             break;
-
         case OP_OP:
+            d.imm = 0;
+            break;
+
         default:
             d.imm = 0;
             break;

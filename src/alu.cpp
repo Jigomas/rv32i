@@ -1,5 +1,6 @@
 #include "../include/alu.hpp"
 
+#include <cassert>
 #include <climits>
 #include <stdexcept>
 
@@ -8,7 +9,6 @@ Word ALU::execute(Op op, Word a, Word b) {
     SWord sb = static_cast<SWord>(b);
 
     switch (op) {
-
         // RV32I: arithmetic
         case Op::ADD:
             return a + b;
@@ -23,7 +23,7 @@ Word ALU::execute(Op op, Word a, Word b) {
         case Op::XOR:
             return a ^ b;
 
-        // RV32I: shift
+        // RV32I: shifts — mask to 5 bits (max shift = 31 for 32-bit word)
         case Op::SLL:
             return a << (b & 0x1Fu);
         case Op::SRL:
@@ -31,13 +31,11 @@ Word ALU::execute(Op op, Word a, Word b) {
         case Op::SRA:
             return static_cast<Word>(sa >> (b & 0x1Fu));
 
-        // RV32I: comparison
         case Op::SLT:
             return (sa < sb) ? 1u : 0u;
         case Op::SLTU:
             return (a < b) ? 1u : 0u;
 
-        // M extension: multiplication
         case Op::MUL: {
             return static_cast<Word>(static_cast<uint64_t>(a) * b);
         }
@@ -54,11 +52,11 @@ Word ALU::execute(Op op, Word a, Word b) {
             return static_cast<Word>(r >> 32);
         }
 
-        //   Div on 0   → DIV/REM:  -1 / divider; DIVU/REMU: 0xFFFFFFFF / divider
-        //   overflow   → INT_MIN/-1: DIV→INT_MIN, REM→0
         case Op::DIV: {
+            // RISC-V spec: div-by-zero = -1
             if (sb == 0)
                 return static_cast<Word>(-1);
+            // RISC-V spec: INT_MIN / -1 = INT_MIN (no exception)
             if (sa == INT32_MIN && sb == -1)
                 return static_cast<Word>(INT32_MIN);
             return static_cast<Word>(sa / sb);
@@ -68,8 +66,6 @@ Word ALU::execute(Op op, Word a, Word b) {
                 return 0xFFFFFFFFu;
             return a / b;
         }
-
-        // M extension: remainder (modulo)
         case Op::REM: {
             if (sb == 0)
                 return a;
@@ -84,6 +80,6 @@ Word ALU::execute(Op op, Word a, Word b) {
         }
 
         default:
-            throw std::runtime_error("ALU: unknown operation");
+            throw std::invalid_argument("ALU::execute — unknown ALU::Op value");
     }
 }

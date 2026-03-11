@@ -9,11 +9,16 @@ class CPU {
 public:
     CPU(Config cfg, Memory& mem);
 
+    ~CPU()                     = default;
+    CPU(const CPU&)            = delete;
+    CPU& operator=(const CPU&) = delete;
+    CPU(CPU&& other) noexcept;
+    CPU& operator=(CPU&&) = delete;
+
+    void setPC(Word addr);
+    void execute();
+
     void run(uint64_t maxSteps = 0);
-
-    void step();
-
-    bool execute(const DecodedInstr& d);
 
     Register& regs();
     bool      isHalted() const;
@@ -31,6 +36,7 @@ private:
     uint64_t instrCount_;
     bool     debugMode_;
 
+    bool executeInstr(const DecodedInstr& d);
     bool executeBranch(const DecodedInstr& d);
     bool executeLoad(const DecodedInstr& d);
     bool executeStore(const DecodedInstr& d);
