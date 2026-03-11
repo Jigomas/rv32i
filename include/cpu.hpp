@@ -2,11 +2,11 @@
 #include "config.hpp"
 #include "decoder.hpp"
 #include "memory.hpp"
-#include "register.hpp"
+#include "registers.hpp"
 #include "types.hpp"
 
 class CPU {
-public:
+public:ё
     CPU(Config cfg, Memory& mem);
 
     void run(uint64_t maxSteps = 0);
