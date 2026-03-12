@@ -301,8 +301,8 @@ static void test_config() {
     Config c(Config::EXT_M);
     check("EXT_M recognized", c.hasExtension(Config::EXT_M));
     check("EXT_A not set", !c.hasExtension(Config::EXT_A));
-    CHECK_THROWS("EXT_A throws", std::invalid_argument, Config(Config::EXT_A));
-    CHECK_THROWS("EXT_F throws", std::invalid_argument, Config(Config::EXT_F));
+    CHECK_THROWS("EXT_A throws", std::invalid_argument, (Config(Config::EXT_A)));
+    CHECK_THROWS("EXT_F throws", std::invalid_argument, (Config(Config::EXT_F)));
 }
 
 int main() {
