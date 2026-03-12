@@ -307,7 +307,7 @@ static void test_config() {
 
 int main() {
     std::cout << "===========================================\n";
-    std::cout << "  RV32I CPU — Test Suite\n";
+    std::cout << "           RV32I CPU — Test Suite          \n";
     std::cout << "===========================================\n";
 
     test_memory();
