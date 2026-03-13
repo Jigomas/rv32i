@@ -20,8 +20,8 @@ constexpr uint8_t a4   = 14;
 static void demo_arithmetic() {
     std::cout << "=== Demo: (3 + 4) * 5 ===\n";
 
-    MemoryModel mem(4096);
-    Config      cfg(Config::EXT_M);
+    MemoryModel<32> mem(4096);
+    Config          cfg(Config::EXT_M);
 
     using namespace InstrBuilder;
     loadProgram(mem,
@@ -32,7 +32,7 @@ static void demo_arithmetic() {
                  MUL(Reg::a4, Reg::a3, Reg::a2),  // a4 = 7 * 5 = 35
                  HALT()});
 
-    RVModel cpu(cfg, mem);
+    RVModel<32> cpu(cfg, mem);
     cpu.setDebug(true);
     cpu.run();
     cpu.regs().dump();
@@ -56,10 +56,6 @@ int main() {
     return 0;
 }
 
-// TODO: template на XLEN — один код для RV32 и RV64
-// TODO: перевести как можно больше на шаблоны
-// TODO: заменить for(auto& ...) на rvalue-версии где уместно
-// TODO: ASSERTS — покрыть оставшиеся инварианты
 // TODO: CSR-регистры и механизм прерываний
 // TODO: ELF-загрузчик
 // TODO: дизассемблер (DecodedInstr → "ADDI a0, zero, 42")

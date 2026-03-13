@@ -71,6 +71,7 @@ enum Funct3Store : uint8_t {
     F3_SW = 0b010,
 };
 
+// Extract bit field [hi:lo] from a 32-bit instruction word
 inline Word extractBits(Word instr, int hi, int lo) {
     assert(hi >= lo && "extractBits: hi must be >= lo");
     assert(hi <= 31 && lo >= 0 && "extractBits: bit indices out of [0,31]");
@@ -79,59 +80,73 @@ inline Word extractBits(Word instr, int hi, int lo) {
     return (instr >> lo) & mask;
 }
 
-inline SWord signExtend(Word val, int bits) {
+// Sign-extend a 'bits'-wide value from a 32-bit instruction word to XLEN bits.
+// For XLEN=32 this is equivalent to the old non-template signExtend.
+// For XLEN=64 the result is sign-extended to 64 bits.
+template <int XLEN = 32>
+inline typename XlenTraits<XLEN>::SWord signExtend(Word val, int bits) {
+    using UW = typename XlenTraits<XLEN>::UWord;
+    using SW = typename XlenTraits<XLEN>::SWord;
     assert(bits >= 1 && bits <= 32 && "signExtend: bits must be in [1,32]");
-    int shift = 32 - bits;
-    return static_cast<SWord>(val << shift) >> shift;
+    int shift = XLEN - bits;
+    return static_cast<SW>(static_cast<UW>(val) << shift) >> shift;
 }
 
+// Field extractors (always operate on 32-bit instruction words)
 inline uint8_t getOpcode(Word i) {
-    return i & 0x7Fu;
+    return static_cast<uint8_t>(i & 0x7Fu);
 }
 inline uint8_t getRd(Word i) {
-    return (i >> 7) & 0x1Fu;
+    return static_cast<uint8_t>((i >> 7) & 0x1Fu);
 }
 inline uint8_t getFunct3(Word i) {
-    return (i >> 12) & 0x07u;
+    return static_cast<uint8_t>((i >> 12) & 0x07u);
 }
 inline uint8_t getRs1(Word i) {
-    return (i >> 15) & 0x1Fu;
+    return static_cast<uint8_t>((i >> 15) & 0x1Fu);
 }
 inline uint8_t getRs2(Word i) {
-    return (i >> 20) & 0x1Fu;
+    return static_cast<uint8_t>((i >> 20) & 0x1Fu);
 }
 inline uint8_t getFunct7(Word i) {
-    return (i >> 25) & 0x7Fu;
+    return static_cast<uint8_t>((i >> 25) & 0x7Fu);
 }
 
-inline SWord decodeImmI(Word i) {
-    return signExtend(extractBits(i, 31, 20), 12);
+// Immediate decoders — templated on XLEN so the result is sign-extended to
+// the machine word width (int32_t for RV32, int64_t for RV64).
+template <int XLEN = 32>
+inline typename XlenTraits<XLEN>::SWord decodeImmI(Word i) {
+    return signExtend<XLEN>(extractBits(i, 31, 20), 12);
 }
 
-inline SWord decodeImmS(Word i) {
+template <int XLEN = 32>
+inline typename XlenTraits<XLEN>::SWord decodeImmS(Word i) {
     Word hi = extractBits(i, 31, 25);
     Word lo = extractBits(i, 11, 7);
-    return signExtend((hi << 5) | lo, 12);
+    return signExtend<XLEN>((hi << 5) | lo, 12);
 }
 
-inline SWord decodeImmB(Word i) {
+template <int XLEN = 32>
+inline typename XlenTraits<XLEN>::SWord decodeImmB(Word i) {
     Word b12   = extractBits(i, 31, 31);
     Word b11   = extractBits(i, 7, 7);
     Word b10_5 = extractBits(i, 30, 25);
     Word b4_1  = extractBits(i, 11, 8);
-    return signExtend((b12 << 12) | (b11 << 11) | (b10_5 << 5) | (b4_1 << 1), 13);
+    return signExtend<XLEN>((b12 << 12) | (b11 << 11) | (b10_5 << 5) | (b4_1 << 1), 13);
 }
 
+// U-type immediate: upper 20 bits, zero in [11:0] — always 32-bit (no sign extension needed)
 inline Word decodeImmU(Word i) {
     return i & 0xFFFFF000u;
 }
 
-inline SWord decodeImmJ(Word i) {
+template <int XLEN = 32>
+inline typename XlenTraits<XLEN>::SWord decodeImmJ(Word i) {
     Word b20    = extractBits(i, 31, 31);
     Word b19_12 = extractBits(i, 19, 12);
     Word b11    = extractBits(i, 20, 20);
     Word b10_1  = extractBits(i, 30, 21);
-    return signExtend((b20 << 20) | (b19_12 << 12) | (b11 << 11) | (b10_1 << 1), 21);
+    return signExtend<XLEN>((b20 << 20) | (b19_12 << 12) | (b11 << 11) | (b10_1 << 1), 21);
 }
 
 }  // namespace ISA

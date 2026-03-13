@@ -2,9 +2,8 @@
 #include <cstdint>
 #include <stdexcept>
 
-
 struct Config {
-    static constexpr int XLEN = 32;  // TODO: template on XLEN for RV64
+    static constexpr int XLEN = 32;
 
     enum Extension : uint32_t {
         EXT_NONE = 0,
@@ -17,18 +16,14 @@ struct Config {
 
     uint32_t extensions;
 
-    explicit Config(uint32_t ext = EXT_NONE)
-        : extensions(ext) {
-        validate();  
-    }
+    explicit Config(uint32_t ext = EXT_NONE) : extensions(ext) { validate(); }
 
     bool hasExtension(Extension e) const { return (extensions & static_cast<uint32_t>(e)) != 0; }
 
     void validate() const {
         constexpr uint32_t IMPLEMENTED = EXT_NONE | EXT_M;
         if (extensions & ~IMPLEMENTED) {
-            throw std::invalid_argument(
-                "Config: extension not implemented (A/F/D/C are stubs)");
+            throw std::invalid_argument("Config: extension not implemented (A/F/D/C are stubs)");
         }
     }
 };

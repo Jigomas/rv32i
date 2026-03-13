@@ -38,8 +38,8 @@ static void check(const char* name, bool condition) {
     }
 
 struct Fixture {
-    MemoryModel mem;
-    RVModel     cpu;
+    MemoryModel<32> mem;
+    RVModel<32>     cpu;
 
     Fixture(const std::vector<Word>& prog, uint32_t ext = Config::EXT_NONE)
         : mem(4096), cpu(Config(ext), mem) {
@@ -55,7 +55,7 @@ struct Fixture {
 static void test_memory() {
     std::cout << "\n[ MemoryModel ]\n";
 
-    MemoryModel m(256);
+    MemoryModel<32> m(256);
 
     m.write(Addr(0), ByteT(0xAB));
     check("write/readByte", m.readByte(0) == 0xABu);
@@ -72,7 +72,7 @@ static void test_memory() {
     CHECK_THROWS("OOB write throws", std::out_of_range, m.write(Addr(255), WordT(0)));
     CHECK_THROWS("loadProgram OOB", std::out_of_range, m.loadProgram(std::vector<uint8_t>(512, 0)));
 
-    MemoryModel copy = m;
+    MemoryModel<32> copy = m;
     copy.write(Addr(0), ByteT(0));
     check("copy is deep", m.readByte(0) == 0xABu);
 }
@@ -80,7 +80,7 @@ static void test_memory() {
 static void test_register_file() {
     std::cout << "\n[ RegisterFile ]\n";
 
-    RegisterFile r;
+    RegisterFile<32> r;
 
     r.set(1, 42u);
     check("set/get", r.get(1) == 42u);
@@ -89,7 +89,7 @@ static void test_register_file() {
     r.set(0, 0xFFFFFFFFu);  // write to x0 is no-op
     check("write x0 is no-op", r.get(0) == 0u);
 
-    RegisterFile copy = r;
+    RegisterFile<32> copy = r;
     copy.set(1, 99u);
     check("copy is deep", r.get(1) == 42u);
 }
@@ -97,30 +97,31 @@ static void test_register_file() {
 static void test_alu() {
     std::cout << "\n[ ALU ]\n";
 
-    check("ADD", ALU::execute(ALU::Op::ADD, 10u, 20u) == 30u);
-    check("SUB", ALU::execute(ALU::Op::SUB, 30u, 7u) == 23u);
-    check("AND", ALU::execute(ALU::Op::AND, 0xF0u, 0xFFu) == 0xF0u);
-    check("OR", ALU::execute(ALU::Op::OR, 0xF0u, 0x0Fu) == 0xFFu);
-    check("XOR", ALU::execute(ALU::Op::XOR, 0xFFu, 0x0Fu) == 0xF0u);
-    check("SLL", ALU::execute(ALU::Op::SLL, 1u, 4u) == 16u);
-    check("SRL", ALU::execute(ALU::Op::SRL, 16u, 2u) == 4u);
+    check("ADD", ALU<32>::execute(ALU<32>::Op::ADD, 10u, 20u) == 30u);
+    check("SUB", ALU<32>::execute(ALU<32>::Op::SUB, 30u, 7u) == 23u);
+    check("AND", ALU<32>::execute(ALU<32>::Op::AND, 0xF0u, 0xFFu) == 0xF0u);
+    check("OR", ALU<32>::execute(ALU<32>::Op::OR, 0xF0u, 0x0Fu) == 0xFFu);
+    check("XOR", ALU<32>::execute(ALU<32>::Op::XOR, 0xFFu, 0x0Fu) == 0xF0u);
+    check("SLL", ALU<32>::execute(ALU<32>::Op::SLL, 1u, 4u) == 16u);
+    check("SRL", ALU<32>::execute(ALU<32>::Op::SRL, 16u, 2u) == 4u);
 
     // SRA preserves sign
-    check("SRA", static_cast<SWord>(ALU::execute(ALU::Op::SRA, static_cast<Word>(-8), 2u)) == -2);
+    check("SRA",
+          static_cast<SWord>(ALU<32>::execute(ALU<32>::Op::SRA, static_cast<Word>(-8), 2u)) == -2);
 
     // SLT/SLTU
-    check("SLT signed", ALU::execute(ALU::Op::SLT, static_cast<Word>(-1), 1u) == 1u);
-    check("SLTU unsigned", ALU::execute(ALU::Op::SLTU, 0xFFFFFFFFu, 1u) == 0u);
+    check("SLT signed", ALU<32>::execute(ALU<32>::Op::SLT, static_cast<Word>(-1), 1u) == 1u);
+    check("SLTU unsigned", ALU<32>::execute(ALU<32>::Op::SLTU, 0xFFFFFFFFu, 1u) == 0u);
 
     // MUL
-    check("MUL", ALU::execute(ALU::Op::MUL, 7u, 6u) == 42u);
+    check("MUL", ALU<32>::execute(ALU<32>::Op::MUL, 7u, 6u) == 42u);
 
     // Division corner cases (RISC-V spec)
-    check("DIV by zero", ALU::execute(ALU::Op::DIV, 5u, 0u) == static_cast<Word>(-1));
-    check("DIVU by zero", ALU::execute(ALU::Op::DIVU, 5u, 0u) == 0xFFFFFFFFu);
-    check("REM by zero", ALU::execute(ALU::Op::REM, 7u, 0u) == 7u);
+    check("DIV by zero", ALU<32>::execute(ALU<32>::Op::DIV, 5u, 0u) == static_cast<Word>(-1));
+    check("DIVU by zero", ALU<32>::execute(ALU<32>::Op::DIVU, 5u, 0u) == 0xFFFFFFFFu);
+    check("REM by zero", ALU<32>::execute(ALU<32>::Op::REM, 7u, 0u) == 7u);
     check("DIV INT_MIN/-1",
-          ALU::execute(ALU::Op::DIV, static_cast<Word>(INT32_MIN), static_cast<Word>(-1)) ==
+          ALU<32>::execute(ALU<32>::Op::DIV, static_cast<Word>(INT32_MIN), static_cast<Word>(-1)) ==
               static_cast<Word>(INT32_MIN));
 }
 
@@ -129,14 +130,14 @@ static void test_decoder() {
 
     // I-type: ADDI x10, x0, 42
     {
-        DecodedInstr d = Decoder::decode(InstrBuilder::ADDI(10, 0, 42));
+        DecodedInstr d = Decoder<32>::decode(InstrBuilder::ADDI(10, 0, 42));
         check("I-type opcode", d.opcode == ISA::OP_OP_IMM);
         check("I-type rd", d.rd == 10u);
         check("I-type imm", d.imm == 42);
     }
     // R-type: ADD x12, x10, x11
     {
-        DecodedInstr d = Decoder::decode(InstrBuilder::ADD(12, 10, 11));
+        DecodedInstr d = Decoder<32>::decode(InstrBuilder::ADD(12, 10, 11));
         check("R-type opcode", d.opcode == ISA::OP_OP);
         check("R-type rd", d.rd == 12u);
         check("R-type rs1", d.rs1 == 10u);
@@ -144,13 +145,14 @@ static void test_decoder() {
     }
     // S-type: SW x10, 8(x11)
     {
-        DecodedInstr d = Decoder::decode(InstrBuilder::SW(10, 11, 8));
+        DecodedInstr d = Decoder<32>::decode(InstrBuilder::SW(10, 11, 8));
         check("S-type opcode", d.opcode == ISA::OP_STORE);
         check("S-type imm", d.imm == 8);
     }
     // B-type negative offset
     {
-        DecodedInstr d = Decoder::decode(InstrBuilder::B(-8, 0, 0, ISA::F3_BEQ, ISA::OP_BRANCH));
+        DecodedInstr d =
+            Decoder<32>::decode(InstrBuilder::B(-8, 0, 0, ISA::F3_BEQ, ISA::OP_BRANCH));
         check("B-type negative imm", d.imm == -8);
     }
 }
