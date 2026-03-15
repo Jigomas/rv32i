@@ -94,22 +94,22 @@ inline typename XlenTraits<XLEN>::SWord signExtend(Word val, int bits) {
 
 // Field extractors (always operate on 32-bit instruction words)
 inline uint8_t getOpcode(Word i) {
-    return static_cast<uint8_t>(i & 0x7Fu);
+    return static_cast<uint8_t>(i & 0b01111111u);
 }
 inline uint8_t getRd(Word i) {
-    return static_cast<uint8_t>((i >> 7) & 0x1Fu);
+    return static_cast<uint8_t>((i >> 7) & 0b00011111u);
 }
 inline uint8_t getFunct3(Word i) {
-    return static_cast<uint8_t>((i >> 12) & 0x07u);
+    return static_cast<uint8_t>((i >> 12) & 0b00000111u);
 }
 inline uint8_t getRs1(Word i) {
-    return static_cast<uint8_t>((i >> 15) & 0x1Fu);
+    return static_cast<uint8_t>((i >> 15) & 0b00011111u);
 }
 inline uint8_t getRs2(Word i) {
-    return static_cast<uint8_t>((i >> 20) & 0x1Fu);
+    return static_cast<uint8_t>((i >> 20) & 0b00011111u);
 }
 inline uint8_t getFunct7(Word i) {
-    return static_cast<uint8_t>((i >> 25) & 0x7Fu);
+    return static_cast<uint8_t>((i >> 25) & 0b01111111u);
 }
 
 // Immediate decoders — templated on XLEN so the result is sign-extended to

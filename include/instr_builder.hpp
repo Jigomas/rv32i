@@ -24,7 +24,7 @@ R(uint8_t funct7, uint8_t rs2, uint8_t rs1, uint8_t funct3, uint8_t rd, uint8_t 
 inline Word I(int16_t imm, uint8_t rs1, uint8_t funct3, uint8_t rd, uint8_t opcode) {
     assert(rd < 32 && rs1 < 32 && funct3 < 8 && "I-type: register/funct3 out of range");
     assert(imm >= -2048 && imm <= 2047 && "I-type: immediate out of [-2048, 2047]");
-    Word imm12 = static_cast<Word>(imm) & 0xFFFu;
+    Word imm12 = static_cast<Word>(imm) & 0b111111111111u;
     return (imm12 << 20) | (Word(rs1) << 15) | (Word(funct3) << 12) | (Word(rd) << 7) |
            Word(opcode);
 }
@@ -33,9 +33,9 @@ inline Word I(int16_t imm, uint8_t rs1, uint8_t funct3, uint8_t rd, uint8_t opco
 inline Word S(int16_t imm, uint8_t rs2, uint8_t rs1, uint8_t funct3, uint8_t opcode) {
     assert(rs1 < 32 && rs2 < 32 && funct3 < 8 && "S-type: register/funct3 out of range");
     assert(imm >= -2048 && imm <= 2047 && "S-type: immediate out of [-2048, 2047]");
-    Word imm12 = static_cast<Word>(imm) & 0xFFFu;
-    return (((imm12 >> 5) & 0x7Fu) << 25) | (Word(rs2) << 20) | (Word(rs1) << 15) |
-           (Word(funct3) << 12) | ((imm12 & 0x1Fu) << 7) | Word(opcode);
+    Word imm12 = static_cast<Word>(imm) & 0b111111111111u;
+    return (((imm12 >> 5) & 0b1111111u) << 25) | (Word(rs2) << 20) | (Word(rs1) << 15) |
+           (Word(funct3) << 12) | ((imm12 & 0b11111u) << 7) | Word(opcode);
 }
 
 // B-type: if (rs1 OP rs2) PC += offset  (offset must be even, non-zero)
@@ -46,8 +46,8 @@ inline Word B(int16_t offset, uint8_t rs2, uint8_t rs1, uint8_t funct3, uint8_t 
     Word o     = static_cast<Word>(offset) & 0x1FFEu;
     Word b12   = (o >> 12) & 1u;
     Word b11   = (o >> 11) & 1u;
-    Word b10_5 = (o >> 5) & 0x3Fu;
-    Word b4_1  = (o >> 1) & 0xFu;
+    Word b10_5 = (o >> 5) & 0b111111u;
+    Word b4_1  = (o >> 1) & 0b1111u;
     return (b12 << 31) | (b10_5 << 25) | (Word(rs2) << 20) | (Word(rs1) << 15) |
            (Word(funct3) << 12) | (b4_1 << 8) | (b11 << 7) | Word(opcode);
 }
@@ -66,7 +66,7 @@ inline Word J(int32_t offset, uint8_t rd, uint8_t opcode) {
     Word b20    = (o >> 20) & 1u;
     Word b19_12 = (o >> 12) & 0xFFu;
     Word b11    = (o >> 11) & 1u;
-    Word b10_1  = (o >> 1) & 0x3FFu;
+    Word b10_1  = (o >> 1) & 0b1111111111u;
     return (b20 << 31) | (b10_1 << 21) | (b11 << 20) | (b19_12 << 12) | (Word(rd) << 7) |
            Word(opcode);
 }

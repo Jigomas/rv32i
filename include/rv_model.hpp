@@ -56,7 +56,7 @@ public:
 
     void execute() {
         assert(!halted_ && "RVModel::execute — called on halted CPU");
-        assert((pc_ & UWord(0x3)) == UWord(0) && "RVModel::execute — PC not 4-byte aligned");
+        assert((pc_ & UWord(0b11)) == UWord(0) && "RVModel::execute — PC not 4-byte aligned");
         if (halted_)
             return;
 
@@ -101,7 +101,7 @@ public:
     UWord getPC() const { return pc_; }
 
     void setPC(Addr addr) {
-        assert((addr & UWord(0x3)) == UWord(0) &&
+        assert((addr & UWord(0b11)) == UWord(0) &&
                "RVModel::setPC — address must be 4-byte aligned");
         pc_ = addr;
     }
@@ -141,7 +141,7 @@ private:
             case OP_JAL: {
                 const UWord ret    = pc_ + UWord(4);
                 const UWord target = pc_ + static_cast<UWord>(d.imm);
-                assert((target & UWord(0x3)) == UWord(0) && "JAL: target not 4-byte aligned");
+                assert((target & UWord(0b11)) == UWord(0) && "JAL: target not 4-byte aligned");
                 regs_.set(d.rd, ret);
                 pc_ = target;
                 return true;
@@ -215,7 +215,7 @@ private:
 
         if (taken) {
             const UWord target = pc_ + static_cast<UWord>(d.imm);
-            assert((target & UWord(0x3)) == UWord(0) && "BRANCH: target not 4-byte aligned");
+            assert((target & UWord(0b11)) == UWord(0) && "BRANCH: target not 4-byte aligned");
             pc_ = target;
             return true;
         }
@@ -308,7 +308,7 @@ private:
                 result = ALU<XLEN>::execute(Op::XOR, rs1v, immv);
                 break;
             case F3_SRL_SRA:
-                result = ALU<XLEN>::execute((d.funct7 & 0x20u) ? Op::SRA : Op::SRL, rs1v, immv);
+                result = ALU<XLEN>::execute((d.funct7 & 0b00100000u) ? Op::SRA : Op::SRL, rs1v, immv);
                 break;
             case F3_OR:
                 result = ALU<XLEN>::execute(Op::OR, rs1v, immv);
