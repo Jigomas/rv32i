@@ -97,8 +97,45 @@ inline Word HALT() {
     return 0x00000000u;
 }
 
-// Load instruction vector into MemoryModel — lvalue overload (copies prog)
-// Note: Word (uint32_t) is a trivially-copyable type; const& is used for generality.
+// A-extension: AMO instructions
+inline Word AMO(uint8_t funct5, bool aq, bool rl,
+                uint8_t rs2, uint8_t rs1, uint8_t rd) {
+    auto f7 = static_cast<uint8_t>((static_cast<uint32_t>(funct5) << 2u) | (aq ? 2u : 0u) | (rl ? 1u : 0u));
+    return R(f7, rs2, rs1, F3_AMO_W, rd, OP_AMO);
+}
+inline Word LR_W     (uint8_t rd, uint8_t rs1, bool aq = false, bool rl = false) {
+    return AMO(F5_LR,      aq, rl, 0,   rs1, rd);
+}
+inline Word SC_W     (uint8_t rd, uint8_t rs2, uint8_t rs1, bool aq = false, bool rl = false) {
+    return AMO(F5_SC,      aq, rl, rs2, rs1, rd);
+}
+inline Word AMOSWAP_W(uint8_t rd, uint8_t rs2, uint8_t rs1, bool aq = false, bool rl = false) {
+    return AMO(F5_AMOSWAP, aq, rl, rs2, rs1, rd);
+}
+inline Word AMOADD_W (uint8_t rd, uint8_t rs2, uint8_t rs1, bool aq = false, bool rl = false) {
+    return AMO(F5_AMOADD,  aq, rl, rs2, rs1, rd);
+}
+inline Word AMOXOR_W (uint8_t rd, uint8_t rs2, uint8_t rs1, bool aq = false, bool rl = false) {
+    return AMO(F5_AMOXOR,  aq, rl, rs2, rs1, rd);
+}
+inline Word AMOAND_W (uint8_t rd, uint8_t rs2, uint8_t rs1, bool aq = false, bool rl = false) {
+    return AMO(F5_AMOAND,  aq, rl, rs2, rs1, rd);
+}
+inline Word AMOOR_W  (uint8_t rd, uint8_t rs2, uint8_t rs1, bool aq = false, bool rl = false) {
+    return AMO(F5_AMOOR,   aq, rl, rs2, rs1, rd);
+}
+inline Word AMOMIN_W (uint8_t rd, uint8_t rs2, uint8_t rs1, bool aq = false, bool rl = false) {
+    return AMO(F5_AMOMIN,  aq, rl, rs2, rs1, rd);
+}
+inline Word AMOMAX_W (uint8_t rd, uint8_t rs2, uint8_t rs1, bool aq = false, bool rl = false) {
+    return AMO(F5_AMOMAX,  aq, rl, rs2, rs1, rd);
+}
+inline Word AMOMINU_W(uint8_t rd, uint8_t rs2, uint8_t rs1, bool aq = false, bool rl = false) {
+    return AMO(F5_AMOMINU, aq, rl, rs2, rs1, rd);
+}
+inline Word AMOMAXU_W(uint8_t rd, uint8_t rs2, uint8_t rs1, bool aq = false, bool rl = false) {
+    return AMO(F5_AMOMAXU, aq, rl, rs2, rs1, rd);
+}
 template <int XLEN = 32>
 inline void loadProgram(MemoryModel<XLEN>&              mem,
                         const std::vector<Word>&        prog,
@@ -111,10 +148,9 @@ inline void loadProgram(MemoryModel<XLEN>&              mem,
         bytes.push_back(static_cast<uint8_t>((w >> 16) & 0xFFu));
         bytes.push_back(static_cast<uint8_t>((w >> 24) & 0xFFu));
     }
-    mem.loadProgram(std::move(bytes), base);  // move bytes into MemoryModel (rvalue)
+    mem.loadProgram(std::move(bytes), base);
 }
 
-// rvalue overload — accepts temporaries without copy
 template <int XLEN = 32>
 inline void loadProgram(MemoryModel<XLEN>&              mem,
                         std::vector<Word>&&             prog,

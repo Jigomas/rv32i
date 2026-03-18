@@ -17,7 +17,6 @@ struct XlenTraits {
     static constexpr SWord SWORD_MIN  = std::numeric_limits<SWord>::min();
 };
 
-// RV32 backward-compat aliases — existing code continues to compile unchanged
 using Word        = typename XlenTraits<32>::UWord;  // uint32_t
 using SWord       = typename XlenTraits<32>::SWord;  // int32_t
 using DWord       = uint64_t;                        // double word (multiply intermediate)

@@ -103,9 +103,27 @@ public:
 
     size_t size() const { return size_; }
 
+    // A-extension: load-reserved / store-conditional support
+    void reserveLoad(Addr addr) {
+        lr_addr_  = addr;
+        lr_valid_ = true;
+    }
+
+    bool storeConditional(Addr addr, WordT val) {
+        if (!lr_valid_ || lr_addr_ != addr)
+            return false;
+        lr_valid_ = false;
+        write(addr, val);
+        return true;
+    }
+
+    void invalidateReservation() { lr_valid_ = false; }
+
 private:
     std::vector<uint8_t> data_;
     size_t               size_;
+    Addr                 lr_addr_  = Addr(0);
+    bool                 lr_valid_ = false;
 
     void checkBounds(Addr addr, size_t width) const {
         assert((width == 1 || width == 2 || width == 4) && "checkBounds: width must be 1, 2, or 4");

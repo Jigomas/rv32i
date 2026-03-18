@@ -166,6 +166,9 @@ private:
             case OP_OP:
                 return executeOp(d);
 
+            case OP_AMO:
+                return executeAMO(d);
+
             case OP_MISC_MEM:
                 return false;
 
@@ -281,6 +284,7 @@ private:
             throw std::runtime_error("RVModel: store fault addr=0x" + std::to_string(addr) + ": " +
                                      e.what());
         }
+        mem_.invalidateReservation();
         return false;
     }
 
@@ -322,6 +326,55 @@ private:
         }
 
         regs_.set(d.rd, result);
+        return false;
+    }
+
+    // A-extension: atomic memory operations (LR/SC + AMO)
+    bool executeAMO(const DecodedInstr<XLEN>& d) {
+        using namespace ISA;
+        if (!config_.hasExtension(Config::EXT_A))
+            throw std::runtime_error("RVModel: A-extension disabled at PC=0x" +
+                                     std::to_string(pc_));
+
+        const Addr    addr   = static_cast<Addr>(regs_.get(d.rs1));
+        const UWord   rs2v   = regs_.get(d.rs2);
+        const uint8_t funct5 = static_cast<uint8_t>(d.funct7 >> 2);
+
+        if (funct5 == F5_LR) {
+            regs_.set(d.rd, static_cast<UWord>(mem_.readWord(addr)));
+            mem_.reserveLoad(addr);
+            return false;
+        }
+
+        if (funct5 == F5_SC) {
+            const bool ok = mem_.storeConditional(addr, static_cast<WordT>(rs2v));
+            regs_.set(d.rd, ok ? UWord(0) : UWord(1));
+            return false;
+        }
+
+        const UWord loaded  = static_cast<UWord>(mem_.readWord(addr));
+        const SWord sloaded = static_cast<SWord>(loaded);
+        const SWord srs2v   = static_cast<SWord>(rs2v);
+        UWord       result  = UWord(0);
+
+        switch (funct5) {
+            case F5_AMOSWAP: result = rs2v;                                                    break;
+            case F5_AMOADD:  result = loaded + rs2v;                                           break;
+            case F5_AMOXOR:  result = loaded ^ rs2v;                                           break;
+            case F5_AMOAND:  result = loaded & rs2v;                                           break;
+            case F5_AMOOR:   result = loaded | rs2v;                                           break;
+            case F5_AMOMIN:  result = static_cast<UWord>(sloaded < srs2v ? sloaded : srs2v);  break;
+            case F5_AMOMAX:  result = static_cast<UWord>(sloaded > srs2v ? sloaded : srs2v);  break;
+            case F5_AMOMINU: result = loaded < rs2v ? loaded : rs2v;                           break;
+            case F5_AMOMAXU: result = loaded > rs2v ? loaded : rs2v;                           break;
+            default:
+                throw std::runtime_error("RVModel: unknown AMO funct5=0x" +
+                                         std::to_string(funct5));
+        }
+
+        mem_.invalidateReservation();
+        mem_.write(addr, static_cast<WordT>(result));
+        regs_.set(d.rd, loaded);
         return false;
     }
 

@@ -7,7 +7,6 @@
 #include "../include/rv_model.hpp"
 #include "../include/types.hpp"
 
-// ABI register aliases for readability
 namespace Reg {
 constexpr uint8_t zero = 0;
 constexpr uint8_t a0   = 10;
@@ -61,7 +60,7 @@ int main() {
 // TODO: дизассемблер (DecodedInstr → "ADDI a0, zero, 42")
 // TODO: MMIO через callback-map в MemoryModel
 // TODO: расширения A / F / D / C
-// yfTODO: Исправить следующие баги:
+// TODO: Исправить следующие баги:
 /* 
 AUIPC immediate для RV64 — decoder.hpp:85: static_cast<SWord>(decodeImmU(raw)) zero-extends uint32_t → int64_t вместо sign-extend. По спеке RISC-V, LUI для RV64 должен sign-extend бит 31 в верхние 32 бита. Пример: LUI 0x80000 должен дать 0xFFFFFFFF80000000, а даёт 0x0000000080000000.
 LW для RV64 — rv_model.hpp:239: static_cast<UWord>(mem_.readWord(addr)) zero-extends 32→64. По спеке RV64, LW должен sign-extend загруженное 32-битное значение.

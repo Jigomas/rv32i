@@ -12,6 +12,8 @@ enum Opcode : uint8_t {
     OP_OP_IMM   = 0b0010011,
     OP_AUIPC    = 0b0010111,
     OP_STORE    = 0b0100011,
+    // A-extension
+    OP_AMO      = 0b0101111,
     OP_OP       = 0b0110011,
     OP_LUI      = 0b0110111,
     OP_BRANCH   = 0b1100011,
@@ -71,7 +73,25 @@ enum Funct3Store : uint8_t {
     F3_SW = 0b010,
 };
 
-// Extract bit field [hi:lo] from a 32-bit instruction word
+// A-extension: funct3 and funct5 fields for AMO instructions
+enum Funct3AMO : uint8_t {
+    F3_AMO_W = 0b010,
+};
+
+enum Funct5AMO : uint8_t {
+    F5_AMOADD  = 0b00000,
+    F5_AMOSWAP = 0b00001,
+    F5_LR      = 0b00010,
+    F5_SC      = 0b00011,
+    F5_AMOXOR  = 0b00100,
+    F5_AMOOR   = 0b01000,
+    F5_AMOAND  = 0b01100,
+    F5_AMOMIN  = 0b10000,
+    F5_AMOMAX  = 0b10100,
+    F5_AMOMINU = 0b11000,
+    F5_AMOMAXU = 0b11100,
+};
+
 inline Word extractBits(Word instr, int hi, int lo) {
     assert(hi >= lo && "extractBits: hi must be >= lo");
     assert(hi <= 31 && lo >= 0 && "extractBits: bit indices out of [0,31]");

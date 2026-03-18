@@ -21,9 +21,9 @@ struct Config {
     bool hasExtension(Extension e) const { return (extensions & static_cast<uint32_t>(e)) != 0; }
 
     void validate() const {
-        constexpr uint32_t IMPLEMENTED = EXT_NONE | EXT_M;
+        constexpr uint32_t IMPLEMENTED = EXT_NONE | EXT_M | EXT_A;
         if (extensions & ~IMPLEMENTED) {
-            throw std::invalid_argument("Config: extension not implemented (A/F/D/C are stubs)");
+            throw std::invalid_argument("Config: extension not implemented (F/D/C are stubs)");
         }
     }
 };
