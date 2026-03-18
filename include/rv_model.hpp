@@ -297,28 +297,28 @@ private:
 
         switch (d.funct3) {
             case F3_ADD_SUB:
-                result = ALU<XLEN>::step(Op::ADD, rs1v, immv);
+                result = ALU<XLEN>::execute(Op::ADD, rs1v, immv);
                 break;
             case F3_SLL:
-                result = ALU<XLEN>::step(Op::SLL, rs1v, immv);
+                result = ALU<XLEN>::execute(Op::SLL, rs1v, immv);
                 break;
             case F3_SLT:
-                result = ALU<XLEN>::step(Op::SLT, rs1v, immv);
+                result = ALU<XLEN>::execute(Op::SLT, rs1v, immv);
                 break;
             case F3_SLTU:
-                result = ALU<XLEN>::step(Op::SLTU, rs1v, immv);
+                result = ALU<XLEN>::execute(Op::SLTU, rs1v, immv);
                 break;
             case F3_XOR:
-                result = ALU<XLEN>::step(Op::XOR, rs1v, immv);
+                result = ALU<XLEN>::execute(Op::XOR, rs1v, immv);
                 break;
             case F3_SRL_SRA:
-                result = ALU<XLEN>::step((d.funct7 & 0b00100000u) ? Op::SRA : Op::SRL, rs1v, immv);
+                result = ALU<XLEN>::execute((d.funct7 & 0b00100000u) ? Op::SRA : Op::SRL, rs1v, immv);
                 break;
             case F3_OR:
-                result = ALU<XLEN>::step(Op::OR, rs1v, immv);
+                result = ALU<XLEN>::execute(Op::OR, rs1v, immv);
                 break;
             case F3_AND:
-                result = ALU<XLEN>::step(Op::AND, rs1v, immv);
+                result = ALU<XLEN>::execute(Op::AND, rs1v, immv);
                 break;
             default:
                 throw std::runtime_error("RVModel: unknown OP_IMM funct3=0x" +
@@ -391,28 +391,28 @@ private:
                                          std::to_string(pc_));
             switch (d.funct3) {
                 case F3_MUL:
-                    result = ALU<XLEN>::step(Op::MUL, rs1v, rs2v);
+                    result = ALU<XLEN>::execute(Op::MUL, rs1v, rs2v);
                     break;
                 case F3_MULH:
-                    result = ALU<XLEN>::step(Op::MULH, rs1v, rs2v);
+                    result = ALU<XLEN>::execute(Op::MULH, rs1v, rs2v);
                     break;
                 case F3_MULHSU:
-                    result = ALU<XLEN>::step(Op::MULHSU, rs1v, rs2v);
+                    result = ALU<XLEN>::execute(Op::MULHSU, rs1v, rs2v);
                     break;
                 case F3_MULHU:
-                    result = ALU<XLEN>::step(Op::MULHU, rs1v, rs2v);
+                    result = ALU<XLEN>::execute(Op::MULHU, rs1v, rs2v);
                     break;
                 case F3_DIV:
-                    result = ALU<XLEN>::step(Op::DIV, rs1v, rs2v);
+                    result = ALU<XLEN>::execute(Op::DIV, rs1v, rs2v);
                     break;
                 case F3_DIVU:
-                    result = ALU<XLEN>::step(Op::DIVU, rs1v, rs2v);
+                    result = ALU<XLEN>::execute(Op::DIVU, rs1v, rs2v);
                     break;
                 case F3_REM:
-                    result = ALU<XLEN>::step(Op::REM, rs1v, rs2v);
+                    result = ALU<XLEN>::execute(Op::REM, rs1v, rs2v);
                     break;
                 case F3_REMU:
-                    result = ALU<XLEN>::step(Op::REMU, rs1v, rs2v);
+                    result = ALU<XLEN>::execute(Op::REMU, rs1v, rs2v);
                     break;
                 default:
                     throw std::runtime_error("RVModel: unknown M-ext funct3=0x" +
@@ -422,29 +422,29 @@ private:
             switch (d.funct3) {
                 case F3_ADD_SUB:
                     result =
-                        ALU<XLEN>::step((d.funct7 == F7_ALT) ? Op::SUB : Op::ADD, rs1v, rs2v);
+                        ALU<XLEN>::execute((d.funct7 == F7_ALT) ? Op::SUB : Op::ADD, rs1v, rs2v);
                     break;
                 case F3_SLL:
-                    result = ALU<XLEN>::step(Op::SLL, rs1v, rs2v);
+                    result = ALU<XLEN>::execute(Op::SLL, rs1v, rs2v);
                     break;
                 case F3_SLT:
-                    result = ALU<XLEN>::step(Op::SLT, rs1v, rs2v);
+                    result = ALU<XLEN>::execute(Op::SLT, rs1v, rs2v);
                     break;
                 case F3_SLTU:
-                    result = ALU<XLEN>::step(Op::SLTU, rs1v, rs2v);
+                    result = ALU<XLEN>::execute(Op::SLTU, rs1v, rs2v);
                     break;
                 case F3_XOR:
-                    result = ALU<XLEN>::step(Op::XOR, rs1v, rs2v);
+                    result = ALU<XLEN>::execute(Op::XOR, rs1v, rs2v);
                     break;
                 case F3_SRL_SRA:
                     result =
-                        ALU<XLEN>::step((d.funct7 == F7_ALT) ? Op::SRA : Op::SRL, rs1v, rs2v);
+                        ALU<XLEN>::execute((d.funct7 == F7_ALT) ? Op::SRA : Op::SRL, rs1v, rs2v);
                     break;
                 case F3_OR:
-                    result = ALU<XLEN>::step(Op::OR, rs1v, rs2v);
+                    result = ALU<XLEN>::execute(Op::OR, rs1v, rs2v);
                     break;
                 case F3_AND:
-                    result = ALU<XLEN>::step(Op::AND, rs1v, rs2v);
+                    result = ALU<XLEN>::execute(Op::AND, rs1v, rs2v);
                     break;
                 default:
                     throw std::runtime_error("RVModel: unknown OP funct3=0x" +

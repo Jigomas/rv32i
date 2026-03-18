@@ -292,7 +292,7 @@ static void test_cpu() {
         loadProgram(mem, {ADDI(10, 0, 1), HALT()});
         RVModel cpu(Config{}, mem);
         check("PC starts at 0", cpu.getPC() == 0u);
-        cpu.execute();
+        cpu.step();
         check("PC advances to 4", cpu.getPC() == 4u);
     }
 }
@@ -303,7 +303,7 @@ static void test_config() {
     Config c(Config::EXT_M);
     check("EXT_M recognized", c.hasExtension(Config::EXT_M));
     check("EXT_A not set", !c.hasExtension(Config::EXT_A));
-    CHECK_THROWS("EXT_A throws", std::invalid_argument, (Config(Config::EXT_A)));
+    check("EXT_A valid", Config(Config::EXT_A).hasExtension(Config::EXT_A));
     CHECK_THROWS("EXT_F throws", std::invalid_argument, (Config(Config::EXT_F)));
 }
 
