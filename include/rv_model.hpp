@@ -13,6 +13,33 @@
 #include "register_file.hpp"
 #include "types.hpp"
 
+// Full context: all 32 registers + pc — used on trap/timer interrupt
+template <int XLEN = 32>
+struct FullContext {
+    typename XlenTraits<XLEN>::UWord pc       = 0;
+    typename XlenTraits<XLEN>::UWord regs[32] = {};
+};
+
+// Minimal context: only callee-saved registers + sp + ra + pc
+template <int XLEN = 32>
+struct Context {
+    typename XlenTraits<XLEN>::UWord pc  = 0;
+    typename XlenTraits<XLEN>::UWord ra  = 0;  // x1
+    typename XlenTraits<XLEN>::UWord sp  = 0;  // x2
+    typename XlenTraits<XLEN>::UWord s0  = 0;  // x8
+    typename XlenTraits<XLEN>::UWord s1  = 0;  // x9
+    typename XlenTraits<XLEN>::UWord s2  = 0;  // x18
+    typename XlenTraits<XLEN>::UWord s3  = 0;  // x19
+    typename XlenTraits<XLEN>::UWord s4  = 0;  // x20
+    typename XlenTraits<XLEN>::UWord s5  = 0;  // x21
+    typename XlenTraits<XLEN>::UWord s6  = 0;  // x22
+    typename XlenTraits<XLEN>::UWord s7  = 0;  // x23
+    typename XlenTraits<XLEN>::UWord s8  = 0;  // x24
+    typename XlenTraits<XLEN>::UWord s9  = 0;  // x25
+    typename XlenTraits<XLEN>::UWord s10 = 0;  // x26
+    typename XlenTraits<XLEN>::UWord s11 = 0;  // x27
+};
+
 template <int XLEN = 32>
 class RVModel {
 public:
@@ -110,6 +137,59 @@ public:
     bool                isHalted() const { return halted_; }
     uint64_t            instrCount() const { return instrCount_; }
     void                setDebug(bool on) { debugMode_ = on; }
+
+    // Approach 2: save/restore only callee-saved registers + sp + ra + pc
+    Context<XLEN> saveContext() const {
+        Context<XLEN> ctx;
+        ctx.pc  = pc_;
+        ctx.ra  = regs_.get(1);
+        ctx.sp  = regs_.get(2);
+        ctx.s0  = regs_.get(8);
+        ctx.s1  = regs_.get(9);
+        ctx.s2  = regs_.get(18);
+        ctx.s3  = regs_.get(19);
+        ctx.s4  = regs_.get(20);
+        ctx.s5  = regs_.get(21);
+        ctx.s6  = regs_.get(22);
+        ctx.s7  = regs_.get(23);
+        ctx.s8  = regs_.get(24);
+        ctx.s9  = regs_.get(25);
+        ctx.s10 = regs_.get(26);
+        ctx.s11 = regs_.get(27);
+        return ctx;
+    }
+
+    FullContext<XLEN> saveFullContext() const {
+        FullContext<XLEN> ctx;
+        ctx.pc = pc_;
+        for (std::size_t i = 0; i < 32; ++i)
+            ctx.regs[i] = regs_.get(i);
+        return ctx;
+    }
+
+    void restoreFullContext(const FullContext<XLEN>& ctx) {
+        pc_ = ctx.pc;
+        for (std::size_t i = 1; i < 32; ++i)
+            regs_.set(i, ctx.regs[i]);
+    }
+
+    void restoreContext(const Context<XLEN>& ctx) {
+        pc_ = ctx.pc;
+        regs_.set(1,  ctx.ra);
+        regs_.set(2,  ctx.sp);
+        regs_.set(8,  ctx.s0);
+        regs_.set(9,  ctx.s1);
+        regs_.set(18, ctx.s2);
+        regs_.set(19, ctx.s3);
+        regs_.set(20, ctx.s4);
+        regs_.set(21, ctx.s5);
+        regs_.set(22, ctx.s6);
+        regs_.set(23, ctx.s7);
+        regs_.set(24, ctx.s8);
+        regs_.set(25, ctx.s9);
+        regs_.set(26, ctx.s10);
+        regs_.set(27, ctx.s11);
+    }
     void                reset() {
         init(0, 0);
         debugMode_ = false;
