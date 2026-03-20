@@ -140,7 +140,7 @@ public:
 
     RegisterFile<XLEN>& regs() { return regs_; }
     bool                isHalted() const { return halted_; }
-    void                halt()           { halted_ = true; }
+    void                halt() { halted_ = true; }
     uint64_t            instrCount() const { return instrCount_; }
     void                setDebug(bool on) { debugMode_ = on; }
 
@@ -181,10 +181,10 @@ public:
 
     void restoreContext(const Context<XLEN>& ctx) {
         pc_ = ctx.pc;
-        regs_.set(1,  ctx.ra);
-        regs_.set(2,  ctx.sp);
-        regs_.set(8,  ctx.s0);
-        regs_.set(9,  ctx.s1);
+        regs_.set(1, ctx.ra);
+        regs_.set(2, ctx.sp);
+        regs_.set(8, ctx.s0);
+        regs_.set(9, ctx.s1);
         regs_.set(18, ctx.s2);
         regs_.set(19, ctx.s3);
         regs_.set(20, ctx.s4);
@@ -196,7 +196,7 @@ public:
         regs_.set(26, ctx.s10);
         regs_.set(27, ctx.s11);
     }
-    void                reset() {
+    void reset() {
         init(0, 0);
         debugMode_ = false;
     }
@@ -269,7 +269,8 @@ private:
                 } else {
                     // EBREAK or unknown — halt
                     if (debugMode_)
-                        std::cout << "[RVModel] SYSTEM at PC=0x" << std::hex << pc_ << " — HALTED\n";
+                        std::cout << "[RVModel] SYSTEM at PC=0x" << std::hex << pc_
+                                  << " — HALTED\n";
                     halted_ = true;
                 }
                 return false;
@@ -408,7 +409,8 @@ private:
                 result = ALU<XLEN>::execute(Op::XOR, rs1v, immv);
                 break;
             case F3_SRL_SRA:
-                result = ALU<XLEN>::execute((d.funct7 & 0b00100000u) ? Op::SRA : Op::SRL, rs1v, immv);
+                result =
+                    ALU<XLEN>::execute((d.funct7 & 0b00100000u) ? Op::SRA : Op::SRL, rs1v, immv);
                 break;
             case F3_OR:
                 result = ALU<XLEN>::execute(Op::OR, rs1v, immv);
@@ -454,18 +456,35 @@ private:
         UWord       result  = UWord(0);
 
         switch (funct5) {
-            case F5_AMOSWAP: result = rs2v;                                                    break;
-            case F5_AMOADD:  result = loaded + rs2v;                                           break;
-            case F5_AMOXOR:  result = loaded ^ rs2v;                                           break;
-            case F5_AMOAND:  result = loaded & rs2v;                                           break;
-            case F5_AMOOR:   result = loaded | rs2v;                                           break;
-            case F5_AMOMIN:  result = static_cast<UWord>(sloaded < srs2v ? sloaded : srs2v);  break;
-            case F5_AMOMAX:  result = static_cast<UWord>(sloaded > srs2v ? sloaded : srs2v);  break;
-            case F5_AMOMINU: result = loaded < rs2v ? loaded : rs2v;                           break;
-            case F5_AMOMAXU: result = loaded > rs2v ? loaded : rs2v;                           break;
+            case F5_AMOSWAP:
+                result = rs2v;
+                break;
+            case F5_AMOADD:
+                result = loaded + rs2v;
+                break;
+            case F5_AMOXOR:
+                result = loaded ^ rs2v;
+                break;
+            case F5_AMOAND:
+                result = loaded & rs2v;
+                break;
+            case F5_AMOOR:
+                result = loaded | rs2v;
+                break;
+            case F5_AMOMIN:
+                result = static_cast<UWord>(sloaded < srs2v ? sloaded : srs2v);
+                break;
+            case F5_AMOMAX:
+                result = static_cast<UWord>(sloaded > srs2v ? sloaded : srs2v);
+                break;
+            case F5_AMOMINU:
+                result = loaded < rs2v ? loaded : rs2v;
+                break;
+            case F5_AMOMAXU:
+                result = loaded > rs2v ? loaded : rs2v;
+                break;
             default:
-                throw std::runtime_error("RVModel: unknown AMO funct5=0x" +
-                                         std::to_string(funct5));
+                throw std::runtime_error("RVModel: unknown AMO funct5=0x" + std::to_string(funct5));
         }
 
         mem_.invalidateReservation();

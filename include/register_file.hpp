@@ -47,9 +47,9 @@ public:
         assert(idx < static_cast<std::size_t>(NUM_REGS));
         return REG_ROLES[idx];
     }
-    static bool isPreserved(std::size_t idx)    { return role(idx) == RegRole::Preserved; }
+    static bool isPreserved(std::size_t idx) { return role(idx) == RegRole::Preserved; }
     static bool isNonPreserved(std::size_t idx) { return role(idx) == RegRole::NonPreserved; }
-    static bool isSpecial(std::size_t idx)      { return role(idx) == RegRole::Special; }
+    static bool isSpecial(std::size_t idx) { return role(idx) == RegRole::Special; }
 
     void dump() const {
         std::cout << "\n=== REGISTER FILE (XLEN=" << XLEN << ") ===\n";

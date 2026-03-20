@@ -102,7 +102,7 @@ public:
     }
 
     size_t   size() const { return size_; }
-    uint8_t* data()       { return data_.data(); }
+    uint8_t* data() { return data_.data(); }
 
     // A-extension: load-reserved / store-conditional support
     void reserveLoad(Addr addr) {

@@ -63,7 +63,7 @@ static void run_os(const char* bin_path) {
     f.seekg(0);
 
     constexpr std::size_t MEM_SIZE = 0x10000;  // 64 KiB
-    MemoryModel<32> mem(MEM_SIZE);
+    MemoryModel<32>       mem(MEM_SIZE);
     f.read(reinterpret_cast<char*>(mem.data()), size);
 
     Config      cfg;

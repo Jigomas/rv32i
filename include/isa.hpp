@@ -13,13 +13,13 @@ enum Opcode : uint8_t {
     OP_AUIPC    = 0b0010111,
     OP_STORE    = 0b0100011,
     // A-extension
-    OP_AMO      = 0b0101111,
-    OP_OP       = 0b0110011,
-    OP_LUI      = 0b0110111,
-    OP_BRANCH   = 0b1100011,
-    OP_JALR     = 0b1100111,
-    OP_JAL      = 0b1101111,
-    OP_SYSTEM   = 0b1110011,
+    OP_AMO    = 0b0101111,
+    OP_OP     = 0b0110011,
+    OP_LUI    = 0b0110111,
+    OP_BRANCH = 0b1100011,
+    OP_JALR   = 0b1100111,
+    OP_JAL    = 0b1101111,
+    OP_SYSTEM = 0b1110011,
 };
 
 enum Funct3ALU : uint8_t {
