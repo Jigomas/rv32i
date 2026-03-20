@@ -1,4 +1,5 @@
 #include <cassert>
+#include <fstream>
 #include <iostream>
 
 #include "../include/config.hpp"
@@ -41,7 +42,48 @@ static void demo_arithmetic() {
     assert(result == 35u);
 }
 
-int main() {
+// a7=1: putchar(a0), a7=10: exit
+static void os_ecall(RVModel<32>& cpu) {
+    const uint32_t a7 = cpu.regs().get(17);
+    const uint32_t a0 = cpu.regs().get(10);
+    if (a7 == 1u)
+        std::cout << static_cast<char>(a0);
+    else if (a7 == 10u)
+        cpu.halt();
+}
+
+static void run_os(const char* bin_path) {
+    std::cout << "=== XorOS ===\n";
+
+    std::ifstream f(bin_path, std::ios::binary | std::ios::ate);
+    if (!f)
+        throw std::runtime_error(std::string("cannot open: ") + bin_path);
+
+    const auto size = f.tellg();
+    f.seekg(0);
+
+    constexpr std::size_t MEM_SIZE = 0x10000;  // 64 KiB
+    MemoryModel<32> mem(MEM_SIZE);
+    f.read(reinterpret_cast<char*>(mem.data()), size);
+
+    Config      cfg;
+    RVModel<32> cpu(cfg, mem);
+    cpu.setEcallHandler(os_ecall);
+    cpu.init(0x0u, static_cast<uint32_t>(MEM_SIZE) - 4u);
+    cpu.run();
+}
+
+int main(int argc, char* argv[]) {
+    if (argc == 2) {
+        try {
+            run_os(argv[1]);
+        } catch (const std::exception& e) {
+            std::cerr << "ERROR: " << e.what() << "\n";
+            return 1;
+        }
+        return 0;
+    }
+
     std::cout << "===========================================\n";
     std::cout << "      RV32I Processor Demo  (XLEN=32)      \n";
     std::cout << "===========================================\n\n";
@@ -54,19 +96,3 @@ int main() {
     }
     return 0;
 }
-
-// TODO: CSR-регистры и механизм прерываний
-// TODO: ELF-загрузчик
-// TODO: дизассемблер (DecodedInstr → "ADDI a0, zero, 42")
-// TODO: MMIO через callback-map в MemoryModel
-// TODO: расширения A / F / D / C
-// TODO: Исправить следующие баги:
-/* 
-AUIPC immediate для RV64 — decoder.hpp:85: static_cast<SWord>(decodeImmU(raw)) zero-extends uint32_t → int64_t вместо sign-extend. По спеке RISC-V, LUI для RV64 должен sign-extend бит 31 в верхние 32 бита. Пример: LUI 0x80000 должен дать 0xFFFFFFFF80000000, а даёт 0x0000000080000000.
-LW для RV64 — rv_model.hpp:239: static_cast<UWord>(mem_.readWord(addr)) zero-extends 32→64. По спеке RV64, LW должен sign-extend загруженное 32-битное значение.
-CTAD без явных шаблонных аргументов — test.cpp:278,280,292,293: MemoryModel mem(4096) и RVModel cpu(Config{}, mem) — CTAD с default non-type template параметрами не гарантирован в C++17 (исправлено в C++20, GCC бэкпортирует как DR, но другие компиляторы могут не скомпилировать).
-Замечания по дизайну (не баги, но стоит знать):
-Config::XLEN = 32 захардкожен — config.hpp:6: не привязан к шаблонному XLEN. Если создать RVModel<64>, Config всё равно скажет 32.
-size_ в MemoryModel дублирует data_.size() — memory_model.hpp:108: лишнее поле.
-Rvalue overload в instr_builder.hpp бесполезен — instr_builder.hpp:118-123: кастует rvalue обратно в const lvalue и вызывает ту же версию. Для uint8_t/uint32_t move = copy.
-*/

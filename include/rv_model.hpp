@@ -1,6 +1,7 @@
 #pragma once
 #include <cassert>
 #include <cstdint>
+#include <functional>
 #include <iomanip>
 #include <iostream>
 #include <stdexcept>
@@ -47,6 +48,8 @@ public:
     using SWord = typename XlenTraits<XLEN>::SWord;
     using Addr  = typename XlenTraits<XLEN>::Addr;
 
+    using EcallHandler = std::function<void(RVModel<XLEN>&)>;
+
     RVModel(Config cfg, MemoryModel<XLEN>& mem)
         : pc_(UWord(0)),
           config_(cfg),
@@ -54,6 +57,8 @@ public:
           halted_(false),
           instrCount_(0),
           debugMode_(false) {}
+
+    void setEcallHandler(EcallHandler h) { ecallHandler_ = std::move(h); }
 
     ~RVModel()                         = default;
     RVModel(const RVModel&)            = delete;
@@ -135,6 +140,7 @@ public:
 
     RegisterFile<XLEN>& regs() { return regs_; }
     bool                isHalted() const { return halted_; }
+    void                halt()           { halted_ = true; }
     uint64_t            instrCount() const { return instrCount_; }
     void                setDebug(bool on) { debugMode_ = on; }
 
@@ -203,6 +209,7 @@ private:
     bool               halted_;
     uint64_t           instrCount_;
     bool               debugMode_;
+    EcallHandler       ecallHandler_;
 
     void advancePC() { pc_ += UWord(4); }
 
@@ -253,10 +260,19 @@ private:
                 return false;
 
             case OP_SYSTEM:
-                if (debugMode_)
-                    std::cout << "[RVModel] SYSTEM at PC=0x" << std::hex << pc_ << " — HALTED\n";
-                halted_ = true;
-                return true;
+                // ECALL: funct3=0, imm=0
+                if (d.funct3 == 0u && d.imm == 0) {
+                    if (ecallHandler_)
+                        ecallHandler_(*this);
+                    else
+                        halted_ = true;
+                } else {
+                    // EBREAK or unknown — halt
+                    if (debugMode_)
+                        std::cout << "[RVModel] SYSTEM at PC=0x" << std::hex << pc_ << " — HALTED\n";
+                    halted_ = true;
+                }
+                return false;
 
             default:
                 throw std::runtime_error("RVModel: illegal opcode 0x" + std::to_string(d.opcode) +

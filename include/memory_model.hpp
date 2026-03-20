@@ -101,7 +101,8 @@ public:
         std::cout << std::dec;
     }
 
-    size_t size() const { return size_; }
+    size_t   size() const { return size_; }
+    uint8_t* data()       { return data_.data(); }
 
     // A-extension: load-reserved / store-conditional support
     void reserveLoad(Addr addr) {
