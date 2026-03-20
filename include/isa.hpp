@@ -73,7 +73,16 @@ enum Funct3Store : uint8_t {
     F3_SW = 0b010,
 };
 
-// A-extension: funct3 and funct5 fields for AMO instructions
+enum Funct3CSR : uint8_t {
+    F3_CSRRW  = 0b001,
+    F3_CSRRS  = 0b010,
+    F3_CSRRC  = 0b011,
+    F3_CSRRWI = 0b101,
+    F3_CSRRSI = 0b110,
+    F3_CSRRCI = 0b111,
+};
+
+// A-extension: AMO funct3 and funct5
 enum Funct3AMO : uint8_t {
     F3_AMO_W = 0b010,
 };
@@ -100,9 +109,7 @@ inline Word extractBits(Word instr, int hi, int lo) {
     return (instr >> lo) & mask;
 }
 
-// Sign-extend a 'bits'-wide value from a 32-bit instruction word to XLEN bits.
-// For XLEN=32 this is equivalent to the old non-template signExtend.
-// For XLEN=64 the result is sign-extended to 64 bits.
+// sign-extend 'bits'-wide value to XLEN bits
 template <int XLEN = 32>
 inline typename XlenTraits<XLEN>::SWord signExtend(Word val, int bits) {
     using UW = typename XlenTraits<XLEN>::UWord;
@@ -112,7 +119,7 @@ inline typename XlenTraits<XLEN>::SWord signExtend(Word val, int bits) {
     return static_cast<SW>(static_cast<UW>(val) << shift) >> shift;
 }
 
-// Field extractors (always operate on 32-bit instruction words)
+// field extractors (32-bit instruction word)
 inline uint8_t getOpcode(Word i) {
     return static_cast<uint8_t>(i & 0b01111111u);
 }
@@ -132,8 +139,7 @@ inline uint8_t getFunct7(Word i) {
     return static_cast<uint8_t>((i >> 25) & 0b01111111u);
 }
 
-// Immediate decoders — templated on XLEN so the result is sign-extended to
-// the machine word width (int32_t for RV32, int64_t for RV64).
+// immediate decoders, result sign-extended to XLEN bits
 template <int XLEN = 32>
 inline typename XlenTraits<XLEN>::SWord decodeImmI(Word i) {
     return signExtend<XLEN>(extractBits(i, 31, 20), 12);
@@ -155,7 +161,7 @@ inline typename XlenTraits<XLEN>::SWord decodeImmB(Word i) {
     return signExtend<XLEN>((b12 << 12) | (b11 << 11) | (b10_5 << 5) | (b4_1 << 1), 13);
 }
 
-// U-type immediate: upper 20 bits, zero in [11:0] — always 32-bit (no sign extension needed)
+// U-type immediate: upper 20 bits, [11:0] = 0
 inline Word decodeImmU(Word i) {
     return i & 0xFFFFF000u;
 }

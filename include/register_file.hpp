@@ -16,7 +16,7 @@ public:
     static constexpr int NUM_REGS = 32;
     static const char*   ABI_NAMES[NUM_REGS];
 
-    // RISC-V calling convention: preserved = callee-saved, must survive a call
+    // RISC-V calling convention
     enum class RegRole : uint8_t { Preserved, NonPreserved, Special };
     static const RegRole REG_ROLES[NUM_REGS];
 
@@ -71,10 +71,10 @@ const char* RegisterFile<XLEN>::ABI_NAMES[] = {"zero", "ra", "sp",  "gp",  "tp",
                                                "a6",   "a7", "s2",  "s3",  "s4", "s5", "s6", "s7",
                                                "s8",   "s9", "s10", "s11", "t3", "t4", "t5", "t6"};
 
-// x0=zero x1=ra x2=sp x3=gp x4=tp — Special
-// x5–x7=t0–t2, x28–x31=t3–t6    — NonPreserved (caller-saved temporaries)
-// x8–x9=s0–s1, x18–x27=s2–s11   — Preserved    (callee-saved)
-// x10–x17=a0–a7                  — NonPreserved (caller-saved arguments/return values)
+// x0=zero x1=ra x2=sp x3=gp x4=tp  - Special
+// x5–x7=t0–t2, x28–x31=t3–t6      - NonPreserved
+// x8–x9=s0–s1, x18–x27=s2–s11     - Preserved
+// x10–x17=a0–a7                    - NonPreserved
 template <int XLEN>
 const typename RegisterFile<XLEN>::RegRole RegisterFile<XLEN>::REG_ROLES[] = {
     RegRole::Special,       // x0  zero

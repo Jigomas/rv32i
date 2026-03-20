@@ -26,7 +26,7 @@ public:
     MemoryModel(MemoryModel&&) noexcept            = default;
     MemoryModel& operator=(MemoryModel&&) noexcept = default;
 
-    // Load raw bytes — lvalue overload (copies)
+    // lvalue overload (copies)
     void loadProgram(const std::vector<uint8_t>& program, Addr base = 0) {
         assert(!program.empty() && "loadProgram: program must not be empty");
         if (static_cast<size_t>(base) + program.size() > size_) {
@@ -38,7 +38,7 @@ public:
         std::copy(program.begin(), program.end(), data_.begin() + static_cast<ptrdiff_t>(base));
     }
 
-    // Load raw bytes — rvalue overload (moves from temporary)
+    // rvalue overload (moves)
     void loadProgram(std::vector<uint8_t>&& program, Addr base = 0) {
         assert(!program.empty() && "loadProgram: program must not be empty");
         if (static_cast<size_t>(base) + program.size() > size_) {
@@ -61,7 +61,7 @@ public:
                                   (static_cast<unsigned>(data_[addr + 1]) << 8));
     }
 
-    // readWord always reads 32 bits (instruction fetch, LW, SW)
+    // always 32 bits: fetch, LW, SW
     WordT readWord(Addr addr) const {
         checkBounds(addr, 4);
         return static_cast<WordT>(data_[addr]) | (static_cast<WordT>(data_[addr + 1]) << 8) |
@@ -104,7 +104,7 @@ public:
     size_t   size() const { return size_; }
     uint8_t* data() { return data_.data(); }
 
-    // A-extension: load-reserved / store-conditional support
+    // A-extension: LR/SC
     void reserveLoad(Addr addr) {
         lr_addr_  = addr;
         lr_valid_ = true;

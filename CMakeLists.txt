@@ -34,6 +34,7 @@ endif()
 # Core library
 add_library(rv32i_lib STATIC
     src/alu.cpp
+    src/csr_file.cpp
     src/decoder.cpp
     src/memory_model.cpp
     src/register_file.cpp

@@ -3,7 +3,7 @@
 #include <limits>
 #include <type_traits>
 
-// XLEN-parameterized type traits — one definition for RV32 and RV64
+// XLEN type traits: UWord/SWord/Addr for RV32 and RV64
 template <int XLEN>
 struct XlenTraits {
     static_assert(XLEN == 32 || XLEN == 64, "XLEN must be 32 or 64");

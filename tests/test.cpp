@@ -116,7 +116,7 @@ static void test_alu() {
     // MUL
     check("MUL", ALU<32>::execute(ALU<32>::Op::MUL, 7u, 6u) == 42u);
 
-    // Division corner cases (RISC-V spec)
+    // division corner cases (RISC-V spec)
     check("DIV by zero", ALU<32>::execute(ALU<32>::Op::DIV, 5u, 0u) == static_cast<Word>(-1));
     check("DIVU by zero", ALU<32>::execute(ALU<32>::Op::DIVU, 5u, 0u) == 0xFFFFFFFFu);
     check("REM by zero", ALU<32>::execute(ALU<32>::Op::REM, 7u, 0u) == 7u);
@@ -149,7 +149,7 @@ static void test_decoder() {
         check("S-type opcode", d.opcode == ISA::OP_STORE);
         check("S-type imm", d.imm == 8);
     }
-    // B-type negative offset
+    // B-type: negative offset
     {
         DecodedInstr d =
             Decoder<32>::decode(InstrBuilder::B(-8, 0, 0, ISA::F3_BEQ, ISA::OP_BRANCH));
@@ -196,7 +196,7 @@ static void test_cpu() {
         check("SW/LW round-trip", f.run(12) == 0x7Fu);
     }
 
-    // LB sign extension
+    // LB sign-extension
     {
         using namespace ISA;
         using namespace InstrBuilder;
@@ -208,7 +208,7 @@ static void test_cpu() {
         check("LB sign-extend", static_cast<SWord>(f.run(12)) == SWord(-1));
     }
 
-    // BEQ taken — skips one instruction
+    // BEQ taken - skips one instruction
     {
         using namespace InstrBuilder;
         Fixture f({B(8, 0, 0, ISA::F3_BEQ, ISA::OP_BRANCH),
@@ -231,7 +231,7 @@ static void test_cpu() {
         check("loop sum 1..10 = 55", f.run(10) == 55u);
     }
 
-    // JAL skips instruction, sets ra
+    // JAL: skips instruction, sets ra
     {
         using namespace InstrBuilder;
         Fixture f({ADDI(10, 0, 1),
@@ -244,7 +244,7 @@ static void test_cpu() {
         check("JAL ra saved", f.cpu.regs().get(1) == 8u);
     }
 
-    // M extension: MUL / DIV / REM
+    // M extension
     {
         using namespace InstrBuilder;
         Fixture f({ADDI(10, 0, 7),
@@ -272,7 +272,7 @@ static void test_cpu() {
     CHECK_THROWS(
         "illegal opcode throws", std::runtime_error, Fixture({Word(0xFFFFFFFFu)}).cpu.run());
 
-    // init() resets state — run twice on same CPU
+    // init() resets state
     {
         using namespace InstrBuilder;
         MemoryModel mem(4096);
@@ -285,7 +285,7 @@ static void test_cpu() {
         check("init() resets and reruns", cpu.regs().get(10) == 7u);
     }
 
-    // getPC() reflects current PC
+    // getPC() reflects PC
     {
         using namespace InstrBuilder;
         MemoryModel mem(4096);
@@ -294,6 +294,90 @@ static void test_cpu() {
         check("PC starts at 0", cpu.getPC() == 0u);
         cpu.step();
         check("PC advances to 4", cpu.getPC() == 4u);
+    }
+}
+
+static void test_csr() {
+    std::cout << "\n[ CSR ]\n";
+    using namespace InstrBuilder;
+
+    // CSRRW: write rs1 to CSR, rd = old value
+    {
+        Fixture f({ADDI(10, 0, 42),
+                   CSRRW(11, CSR::MSCRATCH, 10),  // scratch=42, rd=0 (old)
+                   CSRRW(12, CSR::MSCRATCH, 0),   // scratch=0, rd=42
+                   HALT()});
+        f.cpu.run();
+        check("CSRRW old value 0", f.cpu.regs().get(11) == 0u);
+        check("CSRRW read back 42", f.cpu.regs().get(12) == 42u);
+    }
+
+    // CSRRS: set bits; rs1=x0 → no write
+    {
+        Fixture f({ADDI(10, 0, 0b1010),
+                   CSRRW(0, CSR::MSCRATCH, 10),    // scratch = 0b1010
+                   ADDI(11, 0, 0b0101),
+                   CSRRS(12, CSR::MSCRATCH, 11),   // rd=0b1010, scratch=0b1111
+                   CSRRS(13, CSR::MSCRATCH, 0),    // rs1=x0 → no write, rd=0b1111
+                   HALT()});
+        f.cpu.run();
+        check("CSRRS old value", f.cpu.regs().get(12) == 0b1010u);
+        check("CSRRS set bits", f.cpu.regs().get(13) == 0b1111u);
+    }
+
+    // CSRRC: clear bits; rs1=x0 → no write
+    {
+        Fixture f({ADDI(10, 0, 0b1111),
+                   CSRRW(0, CSR::MSCRATCH, 10),    // scratch = 0b1111
+                   ADDI(11, 0, 0b0101),
+                   CSRRC(12, CSR::MSCRATCH, 11),   // rd=0b1111, scratch=0b1010
+                   CSRRC(13, CSR::MSCRATCH, 0),    // rs1=x0 → no write, rd=0b1010
+                   HALT()});
+        f.cpu.run();
+        check("CSRRC old value", f.cpu.regs().get(12) == 0b1111u);
+        check("CSRRC clear bits", f.cpu.regs().get(13) == 0b1010u);
+    }
+
+    // CSRRWI: write immediate
+    {
+        Fixture f({CSRRWI(10, CSR::MSCRATCH, 7),  // scratch=7, rd=0
+                   CSRRWI(11, CSR::MSCRATCH, 0),  // scratch=0, rd=7
+                   HALT()});
+        f.cpu.run();
+        check("CSRRWI old 0", f.cpu.regs().get(10) == 0u);
+        check("CSRRWI read back 7", f.cpu.regs().get(11) == 7u);
+    }
+
+    // CSRRSI: set bits from zimm; zimm=0 → no write
+    {
+        Fixture f({CSRRWI(0, CSR::MSCRATCH, 0b1010),
+                   CSRRSI(10, CSR::MSCRATCH, 0b0101),  // rd=0b1010, scratch=0b1111
+                   CSRRSI(11, CSR::MSCRATCH, 0),       // zimm=0 → no write, rd=0b1111
+                   HALT()});
+        f.cpu.run();
+        check("CSRRSI old value", f.cpu.regs().get(10) == 0b1010u);
+        check("CSRRSI set bits", f.cpu.regs().get(11) == 0b1111u);
+    }
+
+    // CSRRCI: clear bits from zimm; zimm=0 → no write
+    {
+        Fixture f({CSRRWI(0, CSR::MSCRATCH, 0b1111),
+                   CSRRCI(10, CSR::MSCRATCH, 0b0101),  // rd=0b1111, scratch=0b1010
+                   CSRRCI(11, CSR::MSCRATCH, 0),       // zimm=0 → no write, rd=0b1010
+                   HALT()});
+        f.cpu.run();
+        check("CSRRCI old value", f.cpu.regs().get(10) == 0b1111u);
+        check("CSRRCI clear bits", f.cpu.regs().get(11) == 0b1010u);
+    }
+
+    // read-only CSR: write to MHARTID (addr[11:10]=11) is no-op
+    {
+        Fixture f({ADDI(10, 0, 42),
+                   CSRRW(0, CSR::MHARTID, 10),   // write → no-op (read-only)
+                   CSRRS(11, CSR::MHARTID, 0),   // read
+                   HALT()});
+        f.cpu.run();
+        check("read-only CSR stays 0", f.cpu.regs().get(11) == 0u);
     }
 }
 
@@ -317,6 +401,7 @@ int main() {
     test_alu();
     test_decoder();
     test_cpu();
+    test_csr();
     test_config();
 
     std::cout << "\n===========================================\n";

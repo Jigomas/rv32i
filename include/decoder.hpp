@@ -7,7 +7,7 @@
 #include "isa.hpp"
 #include "types.hpp"
 
-// Decoded instruction — imm is sign-extended to the machine word width (XLEN bits)
+// decoded instruction, imm sign-extended to XLEN bits
 template <int XLEN = 32>
 struct DecodedInstr {
     using SWord = typename XlenTraits<XLEN>::SWord;
@@ -59,7 +59,7 @@ DecodedInstr<XLEN> Decoder<XLEN>::decode(Word raw) {
     d.rs2    = getRs2(raw);
     d.funct7 = getFunct7(raw);
 
-    // Invariant: register indices are 5-bit fields [0,31]
+    // register indices are 5-bit fields [0,31]
     assert(d.rd < 32 && "Decoder: rd out of range");
     assert(d.rs1 < 32 && "Decoder: rs1 out of range");
     assert(d.rs2 < 32 && "Decoder: rs2 out of range");

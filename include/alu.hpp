@@ -50,7 +50,7 @@ typename ALU<XLEN>::UWord ALU<XLEN>::execute(Op op, UWord a, UWord b) {
     SWord sa     = static_cast<SWord>(a);
     SWord sb     = static_cast<SWord>(b);
 
-    // Shift amounts are masked to XLEN-1 bits per spec (5 for RV32, 6 for RV64)
+    // shift amount masked to XLEN-1 bits per spec
     const UWord shamt = b & static_cast<UWord>(Traits::SHIFT_MASK);
 
     switch (op) {
@@ -77,7 +77,7 @@ typename ALU<XLEN>::UWord ALU<XLEN>::execute(Op op, UWord a, UWord b) {
         case Op::SLTU:
             return (a < b) ? UWord(1) : UWord(0);
 
-        // M extension — MUL: lower XLEN bits of 2*XLEN product
+        // MUL: lower XLEN bits of 2*XLEN product
         case Op::MUL: {
             if constexpr (XLEN == 32) {
                 return static_cast<UWord>(static_cast<uint64_t>(a) * static_cast<uint64_t>(b));
@@ -92,7 +92,7 @@ typename ALU<XLEN>::UWord ALU<XLEN>::execute(Op op, UWord a, UWord b) {
             }
         }
 
-        // MULH: upper XLEN bits of signed*signed 2*XLEN product
+        // MULH: upper XLEN bits, signed×signed
         case Op::MULH: {
             if constexpr (XLEN == 32) {
                 int64_t r = int64_t(sa) * int64_t(sb);
@@ -110,7 +110,7 @@ typename ALU<XLEN>::UWord ALU<XLEN>::execute(Op op, UWord a, UWord b) {
             }
         }
 
-        // MULHSU: upper XLEN bits of signed(rs1) * unsigned(rs2) product
+        // MULHSU: upper XLEN bits, signed×unsigned
         case Op::MULHSU: {
             if constexpr (XLEN == 32) {
                 int64_t r = int64_t(sa) * int64_t(static_cast<uint64_t>(b));
@@ -128,7 +128,7 @@ typename ALU<XLEN>::UWord ALU<XLEN>::execute(Op op, UWord a, UWord b) {
             }
         }
 
-        // MULHU: upper XLEN bits of unsigned*unsigned product
+        // MULHU: upper XLEN bits, unsigned×unsigned
         case Op::MULHU: {
             if constexpr (XLEN == 32) {
                 uint64_t r = uint64_t(a) * uint64_t(b);
@@ -147,7 +147,7 @@ typename ALU<XLEN>::UWord ALU<XLEN>::execute(Op op, UWord a, UWord b) {
 
         case Op::DIV: {
             if (sb == SWord(0))
-                return Traits::UWORD_MAX;  // div-by-zero → -1
+                return Traits::UWORD_MAX;  // div-by-zero: -1
             if (sa == Traits::SWORD_MIN && sb == SWord(-1))
                 return static_cast<UWord>(Traits::SWORD_MIN);
             return static_cast<UWord>(sa / sb);

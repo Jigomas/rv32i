@@ -42,13 +42,14 @@ rv32i/
 │   │                       # RegRole (Preserved/NonPreserved/Special), ABI_NAMES[]
 │   ├── memory_model.hpp    # MemoryModel<XLEN>: плоская память, LR/SC reservation
 │   ├── alu.hpp             # ALU<XLEN>::execute(Op, a, b): RV32I + M-ext
-│   ├── instr_builder.hpp   # Кодировщики R/I/S/B/U/J + псевдоинструкции + AMO
-│   └── rv_model.hpp        # RVModel<XLEN>: PC, step/run/halt, ECALL, Context/FullContext
+│   ├── instr_builder.hpp   # Кодировщики R/I/S/B/U/J + псевдоинструкции + AMO + CSR
+│   ├── csr_file.hpp        # Адреса CSR, CsrFile<XLEN>: read/write/csrrw/csrrs/csrrc
+│   └── rv_model.hpp        # RVModel<XLEN>: PC, step/run/halt, ECALL, CSR, Context/FullContext
 ├── src/
 │   ├── main.cpp            # Демо (3+4)*5=35; run_os(path) — загружает OS бинарник
 │   └── *.cpp               # Явные инстанциации шаблонов для XLEN=32 и XLEN=64
 ├── tests/
-│   └── test.cpp            # Набор тестов (MemoryModel, RegisterFile, ALU, Decoder, RVModel)
+│   └── test.cpp            # Набор тестов (MemoryModel, RegisterFile, ALU, Decoder, RVModel, CSR)
 ├── CMakeLists.txt
 └── README.md
 ```
@@ -118,6 +119,7 @@ ECALL-хендлер: `a7=1` → `putchar(a0)`, `a7=10` → halt.
 | Прочее     | `ECALL` `FENCE` (NOP)                                    |
 | M-ext      | `MUL` `MULH` `MULHSU` `MULHU` `DIV` `DIVU` `REM` `REMU`  |
 | A-ext      | `LR.W` `SC.W`+ AMO(SWAP/ADD/XOR/AND/OR/MIN/MAX/MINU/MAXU)|
+| CSR        | `CSRRW` `CSRRS` `CSRRC` `CSRRWI` `CSRRSI` `CSRRCI`       |
 
 ---
 

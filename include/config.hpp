@@ -8,10 +8,10 @@ struct Config {
     enum Extension : uint32_t {
         EXT_NONE = 0,
         EXT_M    = (1u << 0),  // Integer multiply/divide
-        EXT_A    = (1u << 1),  // Atomic ops        [not implemented]
-        EXT_F    = (1u << 2),  // Float 32-bit       [not implemented]
-        EXT_D    = (1u << 3),  // Double 64-bit      [not implemented]
-        EXT_C    = (1u << 4),  // Compressed 16-bit  [not implemented]
+        EXT_A    = (1u << 1),  // Atomic ops
+        EXT_F    = (1u << 2),  // Float 32-bit       [stub]
+        EXT_D    = (1u << 3),  // Double 64-bit      [stub]
+        EXT_C    = (1u << 4),  // Compressed 16-bit  [stub]
     };
 
     uint32_t extensions;

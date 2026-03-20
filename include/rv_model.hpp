@@ -8,20 +8,21 @@
 
 #include "alu.hpp"
 #include "config.hpp"
+#include "csr_file.hpp"
 #include "decoder.hpp"
 #include "isa.hpp"
 #include "memory_model.hpp"
 #include "register_file.hpp"
 #include "types.hpp"
 
-// Full context: all 32 registers + pc — used on trap/timer interrupt
+// all 32 registers + pc
 template <int XLEN = 32>
 struct FullContext {
     typename XlenTraits<XLEN>::UWord pc       = 0;
     typename XlenTraits<XLEN>::UWord regs[32] = {};
 };
 
-// Minimal context: only callee-saved registers + sp + ra + pc
+// callee-saved registers + sp + ra + pc
 template <int XLEN = 32>
 struct Context {
     typename XlenTraits<XLEN>::UWord pc  = 0;
@@ -69,6 +70,7 @@ public:
           config_(other.config_),
           mem_(other.mem_),
           regs_(std::move(other.regs_)),
+          csr_(std::move(other.csr_)),
           halted_(other.halted_),
           instrCount_(other.instrCount_),
           debugMode_(other.debugMode_) {
@@ -79,6 +81,7 @@ public:
 
     void init(Addr startPC = 0, UWord stackPointer = 0) {
         regs_       = RegisterFile<XLEN>();
+        csr_        = CsrFile<XLEN>();
         pc_         = startPC;
         halted_     = false;
         instrCount_ = 0;
@@ -139,12 +142,13 @@ public:
     }
 
     RegisterFile<XLEN>& regs() { return regs_; }
+    CsrFile<XLEN>&      csr()  { return csr_; }
     bool                isHalted() const { return halted_; }
     void                halt() { halted_ = true; }
     uint64_t            instrCount() const { return instrCount_; }
     void                setDebug(bool on) { debugMode_ = on; }
 
-    // Approach 2: save/restore only callee-saved registers + sp + ra + pc
+    // save/restore callee-saved registers + sp + ra + pc
     Context<XLEN> saveContext() const {
         Context<XLEN> ctx;
         ctx.pc  = pc_;
@@ -206,6 +210,7 @@ private:
     Config             config_;
     MemoryModel<XLEN>& mem_;
     RegisterFile<XLEN> regs_;
+    CsrFile<XLEN>      csr_;
     bool               halted_;
     uint64_t           instrCount_;
     bool               debugMode_;
@@ -260,20 +265,23 @@ private:
                 return false;
 
             case OP_SYSTEM:
-                // ECALL: funct3=0, imm=0
-                if (d.funct3 == 0u && d.imm == 0) {
-                    if (ecallHandler_)
-                        ecallHandler_(*this);
-                    else
+                if (d.funct3 == 0u) {
+                    // ECALL: funct3=0, imm=0
+                    if (d.imm == 0) {
+                        if (ecallHandler_)
+                            ecallHandler_(*this);
+                        else
+                            halted_ = true;
+                    } else {
+                        // EBREAK or unknown → halt
+                        if (debugMode_)
+                            std::cout << "[RVModel] SYSTEM at PC=0x" << std::hex << pc_
+                                      << " — HALTED\n";
                         halted_ = true;
-                } else {
-                    // EBREAK or unknown — halt
-                    if (debugMode_)
-                        std::cout << "[RVModel] SYSTEM at PC=0x" << std::hex << pc_
-                                  << " — HALTED\n";
-                    halted_ = true;
+                    }
+                    return false;
                 }
-                return false;
+                return executeCSR(d);
 
             default:
                 throw std::runtime_error("RVModel: illegal opcode 0x" + std::to_string(d.opcode) +
@@ -427,7 +435,42 @@ private:
         return false;
     }
 
-    // A-extension: atomic memory operations (LR/SC + AMO)
+    bool executeCSR(const DecodedInstr<XLEN>& d) {
+        using namespace ISA;
+        const uint16_t addr = static_cast<uint16_t>(d.imm & 0xFFF);
+        const UWord    rs1v = regs_.get(d.rs1);
+        const uint8_t  zimm = static_cast<uint8_t>(d.rs1);
+        UWord          old  = UWord(0);
+
+        switch (d.funct3) {
+            case F3_CSRRW:
+                old = csr_.csrrw(addr, rs1v);
+                break;
+            case F3_CSRRS:
+                old = csr_.csrrs(addr, rs1v, d.rs1 == 0);
+                break;
+            case F3_CSRRC:
+                old = csr_.csrrc(addr, rs1v, d.rs1 == 0);
+                break;
+            case F3_CSRRWI:
+                old = csr_.csrrwi(addr, zimm);
+                break;
+            case F3_CSRRSI:
+                old = csr_.csrrsi(addr, zimm);
+                break;
+            case F3_CSRRCI:
+                old = csr_.csrrci(addr, zimm);
+                break;
+            default:
+                throw std::runtime_error("RVModel: unknown CSR funct3=0x" +
+                                         std::to_string(d.funct3));
+        }
+
+        regs_.set(d.rd, old);
+        return false;
+    }
+
+    // A-extension: LR/SC + AMO
     bool executeAMO(const DecodedInstr<XLEN>& d) {
         using namespace ISA;
         if (!config_.hasExtension(Config::EXT_A))
