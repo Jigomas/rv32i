@@ -218,6 +218,37 @@ private:
 
     void advancePC() { pc_ += UWord(4); }
 
+    void fireTrap(UWord cause, UWord tval = UWord(0)) {
+        UWord mtvec = csr_.getMTVEC();
+        if (mtvec == UWord(0)) {
+            halted_ = true;
+            return;
+        }
+        csr_.setMEPC(pc_);
+        csr_.setMCAUSE(cause);
+        csr_.setMTVAL(tval);
+        // mstatus: MPIE = MIE, MIE = 0, MPP = 11 (M-mode)
+        UWord mstatus = csr_.read(CSR::MSTATUS);
+        bool  mie     = (mstatus & UWord(CSR::MSTATUS_MIE)) != UWord(0);
+        mstatus &= ~UWord(CSR::MSTATUS_MIE | CSR::MSTATUS_MPIE | CSR::MSTATUS_MPP);
+        if (mie) mstatus |= UWord(CSR::MSTATUS_MPIE);
+        mstatus |= UWord(CSR::MSTATUS_MPP);  // MPP = 11 (M-mode)
+        csr_.write(CSR::MSTATUS, mstatus);
+        pc_ = mtvec & ~UWord(3);             // direct mode: BASE & ~3
+    }
+
+    bool executeMRET() {
+        // MIE = MPIE, MPIE = 1, pc = mepc
+        UWord mstatus = csr_.read(CSR::MSTATUS);
+        bool  mpie    = (mstatus & UWord(CSR::MSTATUS_MPIE)) != UWord(0);
+        mstatus &= ~UWord(CSR::MSTATUS_MIE | CSR::MSTATUS_MPIE);
+        if (mpie) mstatus |= UWord(CSR::MSTATUS_MIE);
+        mstatus |= UWord(CSR::MSTATUS_MPIE);
+        csr_.write(CSR::MSTATUS, mstatus);
+        pc_ = csr_.getMEPC();
+        return true;
+    }
+
     bool executeInstr(const DecodedInstr<XLEN>& d) {
         using namespace ISA;
 
@@ -272,6 +303,9 @@ private:
                             ecallHandler_(*this);
                         else
                             halted_ = true;
+                    } else if (d.imm == 0x302) {
+                        // MRET: pc = mepc, restore mstatus.MIE from MPIE
+                        return executeMRET();
                     } else {
                         // EBREAK or unknown → halt
                         if (debugMode_)
@@ -284,6 +318,10 @@ private:
                 return executeCSR(d);
 
             default:
+                if (csr_.getMTVEC() != UWord(0)) {
+                    fireTrap(UWord(CSR::EXC_ILLEGAL_INSN), UWord(d.opcode));
+                    return true;
+                }
                 throw std::runtime_error("RVModel: illegal opcode 0x" + std::to_string(d.opcode) +
                                          " at PC=0x" + std::to_string(pc_));
         }
