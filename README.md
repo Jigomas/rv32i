@@ -125,14 +125,15 @@ ECALL-хендлер: `a7=1` → `putchar(a0)`, `a7=10` → halt.
 
 ## Обработка ошибок
 
-| Ситуация                              | Исключение                |
-|---------------------------------------|---------------------------|
-| Обращение за границы памяти           | `std::out_of_range`       |
-| Fetch fault (PC вне памяти)           | `std::runtime_error`      |
-| Load/store fault                      | `std::runtime_error`      |
-| Нелегальный опкод                     | `std::runtime_error`      |
-| M/A-инструкция при выключенном EXT_M/A| `std::runtime_error`      |
-| Неизвестная операция в ALU            | `std::invalid_argument`   |
+| Ситуация                               | Поведение                          |
+|----------------------------------------|------------------------------------|
+| Обращение за границы памяти            | `std::out_of_range`                |
+| Fetch fault (PC вне памяти)            | `std::runtime_error`               |
+| Load/store fault                       | `std::runtime_error`               |
+| Нелегальный опкод (mtvec=0)            | `std::runtime_error`               |
+| Нелегальный опкод (mtvec≠0)            | `fireTrap` - переход в trap-хендлер|
+| M/A-инструкция при выключенном EXT_M/A | `std::runtime_error`               |
+| Неизвестная операция в ALU             | `std::invalid_argument`            |
 
 В Debug-сборке дополнительно срабатывают `assert` на:
 
