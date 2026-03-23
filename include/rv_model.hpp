@@ -4,6 +4,7 @@
 #include <functional>
 #include <iomanip>
 #include <iostream>
+#include <optional>
 #include <stdexcept>
 
 #include "alu.hpp"
@@ -42,16 +43,18 @@ struct Context {
     typename XlenTraits<XLEN>::UWord s11 = 0;  // x27
 };
 
-template <int XLEN = 32>
+enum class MemAccess { FETCH, LOAD, STORE };
+
+template <int XLEN = 32, typename MemT = MemoryModel<XLEN>>
 class RVModel {
 public:
     using UWord = typename XlenTraits<XLEN>::UWord;
     using SWord = typename XlenTraits<XLEN>::SWord;
     using Addr  = typename XlenTraits<XLEN>::Addr;
 
-    using EcallHandler = std::function<void(RVModel<XLEN>&)>;
+    using EcallHandler = std::function<void(RVModel<XLEN, MemT>&)>;
 
-    RVModel(Config cfg, MemoryModel<XLEN>& mem)
+    RVModel(Config cfg, MemT& mem)
         : pc_(UWord(0)),
           config_(cfg),
           mem_(mem),
@@ -95,12 +98,16 @@ public:
         if (halted_)
             return;
 
+        const auto paddr_fetch = translateAddr(Addr(pc_), MemAccess::FETCH);
+        if (!paddr_fetch) { ++instrCount_; return; }
+
         Word raw;
         try {
-            raw = mem_.readWord(pc_);
-        } catch (const std::out_of_range& e) {
-            throw std::runtime_error("RVModel: fetch fault at PC=0x" + std::to_string(pc_) + ": " +
-                                     e.what());
+            raw = mem_.readWord(*paddr_fetch);
+        } catch (const std::out_of_range&) {
+            fireTrap(UWord(CSR::EXC_INSN_FAULT), pc_);
+            ++instrCount_;
+            return;
         }
 
         if (raw == 0u) {
@@ -208,7 +215,7 @@ public:
 private:
     UWord              pc_;
     Config             config_;
-    MemoryModel<XLEN>& mem_;
+    MemT& mem_;
     RegisterFile<XLEN> regs_;
     CsrFile<XLEN>      csr_;
     bool               halted_;
@@ -217,6 +224,66 @@ private:
     EcallHandler       ecallHandler_;
 
     void advancePC() { pc_ += UWord(4); }
+
+    static UWord pageFaultCause(MemAccess access) {
+        switch (access) {
+            case MemAccess::FETCH: return UWord(CSR::EXC_INSN_PAGE_FAULT);
+            case MemAccess::LOAD:  return UWord(CSR::EXC_LOAD_PAGE_FAULT);
+            case MemAccess::STORE: return UWord(CSR::EXC_STORE_PAGE_FAULT);
+        }
+        return UWord(CSR::EXC_LOAD_PAGE_FAULT);
+    }
+
+    // Sv32 two-level page walk; returns physical address or fires trap and returns nullopt
+    std::optional<Addr> translateAddr(Addr va, MemAccess access) {
+        const UWord satp = csr_.read(CSR::SATP);
+        if ((satp >> 31u) == 0u)
+            return va;  // bare mode - no translation
+
+        const UWord cause  = pageFaultCause(access);
+        const UWord ppn    = satp & 0x3FFFFFu;
+        const UWord vpn[2] = {(UWord(va) >> 12u) & 0x3FFu,   // vpn[0]: va[21:12]
+                              (UWord(va) >> 22u) & 0x3FFu};  // vpn[1]: va[31:22]
+        const UWord offset = UWord(va) & 0xFFFu;
+
+        Addr a = static_cast<Addr>(ppn << 12u);
+
+        for (int lvl = 1; lvl >= 0; --lvl) {
+            const Addr pte_addr = static_cast<Addr>(a | (vpn[lvl] << 2u));
+            UWord pte;
+            try {
+                pte = static_cast<UWord>(mem_.readWord(pte_addr));
+            } catch (...) {
+                fireTrap(cause, UWord(va));
+                return std::nullopt;
+            }
+
+            if (!(pte & 0x1u)) {  // V=0
+                fireTrap(cause, UWord(va));
+                return std::nullopt;
+            }
+
+            if (pte & 0xAu) {  // R=1 or X=1 - leaf PTE
+                if (lvl == 1 && ((pte >> 10u) & 0x3FFu)) {  // misaligned superpage
+                    fireTrap(cause, UWord(va));
+                    return std::nullopt;
+                }
+                // superpage: pa = pte.ppn[1]:va.vpn[0]:offset
+                // regular:   pa = pte.ppn:offset
+                const UWord pa = (lvl == 1)
+                    ? (((pte >> 20u) & 0xFFFu) << 22u) | (vpn[0] << 12u) | offset
+                    : ((pte >> 10u) << 12u) | offset;
+                return static_cast<Addr>(pa);
+            }
+
+            if (lvl == 0) {  // non-leaf at bottom level
+                fireTrap(cause, UWord(va));
+                return std::nullopt;
+            }
+            a = static_cast<Addr>((pte >> 10u) << 12u);
+        }
+        return std::nullopt;  // unreachable
+    }
 
     void fireTrap(UWord cause, UWord tval = UWord(0)) {
         UWord mtvec = csr_.getMTVEC();
@@ -264,7 +331,10 @@ private:
             case OP_JAL: {
                 const UWord ret    = pc_ + UWord(4);
                 const UWord target = pc_ + static_cast<UWord>(d.imm);
-                assert((target & UWord(0b11)) == UWord(0) && "JAL: target not 4-byte aligned");
+                if (target & UWord(0b11)) {
+                    fireTrap(UWord(CSR::EXC_INSN_MISALIGN), target);
+                    return true;
+                }
                 regs_.set(d.rd, ret);
                 pc_ = target;
                 return true;
@@ -272,7 +342,11 @@ private:
 
             case OP_JALR: {
                 const UWord ret    = pc_ + UWord(4);
-                const UWord target = (regs_.get(d.rs1) + static_cast<UWord>(d.imm)) & ~UWord(1);
+                const UWord target = (regs_.get(d.rs1) + static_cast<UWord>(d.imm)) & ~UWord(0b01);
+                if (target & UWord(0b10)) {
+                    fireTrap(UWord(CSR::EXC_INSN_MISALIGN), target);
+                    return true;
+                }
                 regs_.set(d.rd, ret);
                 pc_ = target;
                 return true;
@@ -306,6 +380,9 @@ private:
                     } else if (d.imm == 0x302) {
                         // MRET: pc = mepc, restore mstatus.MIE from MPIE
                         return executeMRET();
+                    } else if ((d.imm & 0xFE0) == 0x120) {
+                        // SFENCE.VMA - NOP (no TLB in simulator)
+                        return false;
                     } else {
                         // EBREAK or unknown → halt
                         if (debugMode_)
@@ -355,13 +432,16 @@ private:
                 taken = (r1 >= r2);
                 break;
             default:
-                throw std::runtime_error("RVModel: unknown branch funct3=0x" +
-                                         std::to_string(d.funct3));
+                fireTrap(UWord(CSR::EXC_ILLEGAL_INSN), UWord(d.opcode));
+                return true;
         }
 
         if (taken) {
             const UWord target = pc_ + static_cast<UWord>(d.imm);
-            assert((target & UWord(0b11)) == UWord(0) && "BRANCH: target not 4-byte aligned");
+            if (target & UWord(0b11)) {
+                fireTrap(UWord(CSR::EXC_INSN_MISALIGN), target);
+                return true;
+            }
             pc_ = target;
             return true;
         }
@@ -372,31 +452,44 @@ private:
         using namespace ISA;
         const Addr addr = static_cast<Addr>(static_cast<SWord>(regs_.get(d.rs1)) + d.imm);
 
+        // alignment: LW - 4-byte, LH/LHU - 2-byte, LB/LBU - no requirement
+        if ((d.funct3 == F3_LW) && (UWord(addr) & UWord(0b11))) {
+            fireTrap(UWord(CSR::EXC_LOAD_MISALIGN), UWord(addr));
+            return true;
+        }
+        if ((d.funct3 == F3_LH || d.funct3 == F3_LHU) && (UWord(addr) & UWord(0b01))) {
+            fireTrap(UWord(CSR::EXC_LOAD_MISALIGN), UWord(addr));
+            return true;
+        }
+
+        const auto paddr_load = translateAddr(addr, MemAccess::LOAD);
+        if (!paddr_load) return true;
+
         UWord result = UWord(0);
         try {
             switch (d.funct3) {
                 case F3_LB:
-                    result = static_cast<UWord>(ISA::signExtend<XLEN>(mem_.readByte(addr), 8));
+                    result = static_cast<UWord>(ISA::signExtend<XLEN>(mem_.readByte(*paddr_load), 8));
                     break;
                 case F3_LH:
-                    result = static_cast<UWord>(ISA::signExtend<XLEN>(mem_.readHalf(addr), 16));
+                    result = static_cast<UWord>(ISA::signExtend<XLEN>(mem_.readHalf(*paddr_load), 16));
                     break;
                 case F3_LW:
-                    result = static_cast<UWord>(mem_.readWord(addr));
+                    result = static_cast<UWord>(mem_.readWord(*paddr_load));
                     break;
                 case F3_LBU:
-                    result = static_cast<UWord>(mem_.readByte(addr));
+                    result = static_cast<UWord>(mem_.readByte(*paddr_load));
                     break;
                 case F3_LHU:
-                    result = static_cast<UWord>(mem_.readHalf(addr));
+                    result = static_cast<UWord>(mem_.readHalf(*paddr_load));
                     break;
                 default:
-                    throw std::runtime_error("RVModel: unknown load funct3=0x" +
-                                             std::to_string(d.funct3));
+                    fireTrap(UWord(CSR::EXC_ILLEGAL_INSN), UWord(d.opcode));
+                    return true;
             }
-        } catch (const std::out_of_range& e) {
-            throw std::runtime_error("RVModel: load fault addr=0x" + std::to_string(addr) + ": " +
-                                     e.what());
+        } catch (const std::out_of_range&) {
+            fireTrap(UWord(CSR::EXC_LOAD_FAULT), UWord(addr));
+            return true;
         }
 
         regs_.set(d.rd, result);
@@ -408,24 +501,37 @@ private:
         const Addr  addr = static_cast<Addr>(static_cast<SWord>(regs_.get(d.rs1)) + d.imm);
         const UWord data = regs_.get(d.rs2);
 
+        // alignment: SW - 4-byte, SH - 2-byte, SB - no requirement
+        if ((d.funct3 == F3_SW) && (UWord(addr) & UWord(0b11))) {
+            fireTrap(UWord(CSR::EXC_STORE_MISALIGN), UWord(addr));
+            return true;
+        }
+        if ((d.funct3 == F3_SH) && (UWord(addr) & UWord(0b01))) {
+            fireTrap(UWord(CSR::EXC_STORE_MISALIGN), UWord(addr));
+            return true;
+        }
+
+        const auto paddr_store = translateAddr(addr, MemAccess::STORE);
+        if (!paddr_store) return true;
+
         try {
             switch (d.funct3) {
                 case F3_SB:
-                    mem_.write(addr, static_cast<ByteT>(data & 0xFFu));
+                    mem_.write(*paddr_store, static_cast<ByteT>(data & 0xFFu));
                     break;
                 case F3_SH:
-                    mem_.write(addr, static_cast<HalfT>(data & 0xFFFFu));
+                    mem_.write(*paddr_store, static_cast<HalfT>(data & 0xFFFFu));
                     break;
                 case F3_SW:
-                    mem_.write(addr, static_cast<WordT>(data));
+                    mem_.write(*paddr_store, static_cast<WordT>(data));
                     break;
                 default:
-                    throw std::runtime_error("RVModel: unknown store funct3=0x" +
-                                             std::to_string(d.funct3));
+                    fireTrap(UWord(CSR::EXC_ILLEGAL_INSN), UWord(d.opcode));
+                    return true;
             }
-        } catch (const std::out_of_range& e) {
-            throw std::runtime_error("RVModel: store fault addr=0x" + std::to_string(addr) + ": " +
-                                     e.what());
+        } catch (const std::out_of_range&) {
+            fireTrap(UWord(CSR::EXC_STORE_FAULT), UWord(addr));
+            return true;
         }
         mem_.invalidateReservation();
         return false;
@@ -465,8 +571,8 @@ private:
                 result = ALU<XLEN>::execute(Op::AND, rs1v, immv);
                 break;
             default:
-                throw std::runtime_error("RVModel: unknown OP_IMM funct3=0x" +
-                                         std::to_string(d.funct3));
+                fireTrap(UWord(CSR::EXC_ILLEGAL_INSN), UWord(d.opcode));
+                return true;
         }
 
         regs_.set(d.rd, result);
@@ -500,8 +606,8 @@ private:
                 old = csr_.csrrci(addr, zimm);
                 break;
             default:
-                throw std::runtime_error("RVModel: unknown CSR funct3=0x" +
-                                         std::to_string(d.funct3));
+                fireTrap(UWord(CSR::EXC_ILLEGAL_INSN), UWord(d.opcode));
+                return true;
         }
 
         regs_.set(d.rd, old);
@@ -511,27 +617,37 @@ private:
     // A-extension: LR/SC + AMO
     bool executeAMO(const DecodedInstr<XLEN>& d) {
         using namespace ISA;
-        if (!config_.hasExtension(Config::EXT_A))
-            throw std::runtime_error("RVModel: A-extension disabled at PC=0x" +
-                                     std::to_string(pc_));
+        if (!config_.hasExtension(Config::EXT_A)) {
+            fireTrap(UWord(CSR::EXC_ILLEGAL_INSN), UWord(d.opcode));
+            return true;
+        }
 
         const Addr    addr   = static_cast<Addr>(regs_.get(d.rs1));
         const UWord   rs2v   = regs_.get(d.rs2);
         const uint8_t funct5 = static_cast<uint8_t>(d.funct7 >> 2);
 
+        // AMO - 4-byte aligned
+        if (UWord(addr) & UWord(0b11)) {
+            fireTrap(UWord(CSR::EXC_STORE_MISALIGN), UWord(addr));
+            return true;
+        }
+
+        const auto paddr_amo = translateAddr(addr, MemAccess::STORE);
+        if (!paddr_amo) return true;
+
         if (funct5 == F5_LR) {
-            regs_.set(d.rd, static_cast<UWord>(mem_.readWord(addr)));
-            mem_.reserveLoad(addr);
+            regs_.set(d.rd, static_cast<UWord>(mem_.readWord(*paddr_amo)));
+            mem_.reserveLoad(*paddr_amo);
             return false;
         }
 
         if (funct5 == F5_SC) {
-            const bool ok = mem_.storeConditional(addr, static_cast<WordT>(rs2v));
+            const bool ok = mem_.storeConditional(*paddr_amo, static_cast<WordT>(rs2v));
             regs_.set(d.rd, ok ? UWord(0) : UWord(1));
             return false;
         }
 
-        const UWord loaded  = static_cast<UWord>(mem_.readWord(addr));
+        const UWord loaded  = static_cast<UWord>(mem_.readWord(*paddr_amo));
         const SWord sloaded = static_cast<SWord>(loaded);
         const SWord srs2v   = static_cast<SWord>(rs2v);
         UWord       result  = UWord(0);
@@ -565,11 +681,12 @@ private:
                 result = loaded > rs2v ? loaded : rs2v;
                 break;
             default:
-                throw std::runtime_error("RVModel: unknown AMO funct5=0x" + std::to_string(funct5));
+                fireTrap(UWord(CSR::EXC_ILLEGAL_INSN), UWord(d.opcode));
+                return true;
         }
 
         mem_.invalidateReservation();
-        mem_.write(addr, static_cast<WordT>(result));
+        mem_.write(*paddr_amo, static_cast<WordT>(result));
         regs_.set(d.rd, loaded);
         return false;
     }
@@ -582,9 +699,10 @@ private:
         UWord       result = UWord(0);
 
         if (d.funct7 == F7_MEXT) {
-            if (!config_.hasExtension(Config::EXT_M))
-                throw std::runtime_error("RVModel: M-extension disabled at PC=0x" +
-                                         std::to_string(pc_));
+            if (!config_.hasExtension(Config::EXT_M)) {
+                fireTrap(UWord(CSR::EXC_ILLEGAL_INSN), UWord(d.opcode));
+                return true;
+            }
             switch (d.funct3) {
                 case F3_MUL:
                     result = ALU<XLEN>::execute(Op::MUL, rs1v, rs2v);
@@ -611,8 +729,8 @@ private:
                     result = ALU<XLEN>::execute(Op::REMU, rs1v, rs2v);
                     break;
                 default:
-                    throw std::runtime_error("RVModel: unknown M-ext funct3=0x" +
-                                             std::to_string(d.funct3));
+                    fireTrap(UWord(CSR::EXC_ILLEGAL_INSN), UWord(d.opcode));
+                    return true;
             }
         } else {
             switch (d.funct3) {
@@ -643,8 +761,8 @@ private:
                     result = ALU<XLEN>::execute(Op::AND, rs1v, rs2v);
                     break;
                 default:
-                    throw std::runtime_error("RVModel: unknown OP funct3=0x" +
-                                             std::to_string(d.funct3));
+                    fireTrap(UWord(CSR::EXC_ILLEGAL_INSN), UWord(d.opcode));
+                    return true;
             }
         }
 
@@ -652,3 +770,7 @@ private:
         return false;
     }
 };
+
+// deduction guide: RVModel cpu(cfg, mem) where mem is MemoryModel<XLEN>&
+template <int XLEN>
+RVModel(Config, MemoryModel<XLEN>&) -> RVModel<XLEN, MemoryModel<XLEN>>;

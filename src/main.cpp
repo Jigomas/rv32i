@@ -1,7 +1,9 @@
 #include <cassert>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 
+#include "../cache_src/include/cache_model.hpp"
 #include "../include/config.hpp"
 #include "../include/instr_builder.hpp"
 #include "../include/memory_model.hpp"
@@ -42,16 +44,6 @@ static void demo_arithmetic() {
     assert(result == 35u);
 }
 
-// a7=1: putchar(a0), a7=10: exit
-static void os_ecall(RVModel<32>& cpu) {
-    const uint32_t a7 = cpu.regs().get(17);
-    const uint32_t a0 = cpu.regs().get(10);
-    if (a7 == 1u)
-        std::cout << static_cast<char>(a0);
-    else if (a7 == 10u)
-        cpu.halt();
-}
-
 static void run_os(const char* bin_path) {
     std::cout << "=== XorOS ===\n";
 
@@ -66,11 +58,23 @@ static void run_os(const char* bin_path) {
     MemoryModel<32>       mem(MEM_SIZE);
     f.read(reinterpret_cast<char*>(mem.data()), size);
 
-    Config      cfg;
-    RVModel<32> cpu(cfg, mem);
-    cpu.setEcallHandler(os_ecall);
+    CacheModel<32> cache(mem, 64);
+    Config         cfg;
+    RVModel<32, CacheModel<32>> cpu(cfg, cache);
+    cpu.setEcallHandler([](RVModel<32, CacheModel<32>>& c) {
+        const uint32_t a7 = c.regs().get(17);
+        const uint32_t a0 = c.regs().get(10);
+        if (a7 == 1u)
+            std::cout << static_cast<char>(a0);
+        else if (a7 == 10u)
+            c.halt();
+    });
     cpu.init(0x0u, static_cast<uint32_t>(MEM_SIZE) - 4u);
     cpu.run();
+
+    std::cout << "\ncache: " << cache.hits() << " hits / " << cache.misses() << " misses"
+              << " | " << std::fixed << std::setprecision(1)
+              << cache.hitRate() * 100.0 << "% hit rate\n";
 }
 
 int main(int argc, char* argv[]) {

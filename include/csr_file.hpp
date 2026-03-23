@@ -14,6 +14,7 @@ constexpr uint16_t MARCHID   = 0xF12;  // architecture id
 constexpr uint16_t MIMPID    = 0xF13;  // implementation id
 constexpr uint16_t MHARTID   = 0xF14;  // hart id, always 0
 
+constexpr uint16_t SATP     = 0x180;  // supervisor address translation (Sv32)
 constexpr uint16_t MSTATUS  = 0x300;  // machine status
 constexpr uint16_t MISA     = 0x301;  // ISA and extensions
 constexpr uint16_t MIE      = 0x304;  // machine interrupt enable
@@ -47,8 +48,11 @@ constexpr uint32_t EXC_LOAD_MISALIGN  = 0b0100u;  // load address misaligned
 constexpr uint32_t EXC_LOAD_FAULT     = 0b0101u;  // load access fault
 constexpr uint32_t EXC_STORE_MISALIGN = 0b0110u;  // store address misaligned
 constexpr uint32_t EXC_STORE_FAULT    = 0b0111u;  // store access fault
-constexpr uint32_t EXC_ECALL_U        = 0b1000u;  // ecall from U-mode
-constexpr uint32_t EXC_ECALL_M        = 0b1011u;  // ecall from M-mode
+constexpr uint32_t EXC_ECALL_U          = 0b1000u;  // ecall from U-mode
+constexpr uint32_t EXC_ECALL_M          = 0b1011u;  // ecall from M-mode
+constexpr uint32_t EXC_INSN_PAGE_FAULT  = 12u;      // instruction page fault
+constexpr uint32_t EXC_LOAD_PAGE_FAULT  = 13u;      // load page fault
+constexpr uint32_t EXC_STORE_PAGE_FAULT = 15u;      // store page fault
 
 // interrupt codes
 constexpr uint32_t INT_SW_M    = MCAUSE_INTERRUPT | 0b0011u;  // machine software interrupt

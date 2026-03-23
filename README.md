@@ -49,7 +49,8 @@ rv32i/
 │   ├── main.cpp            # Демо (3+4)*5=35; run_os(path) — загружает OS бинарник
 │   └── *.cpp               # Явные инстанциации шаблонов для XLEN=32 и XLEN=64
 ├── tests/
-│   └── test.cpp            # Набор тестов (MemoryModel, RegisterFile, ALU, Decoder, RVModel, CSR)
+│   └── test.cpp            # Набор тестов (MemoryModel, RegisterFile, ALU, Decoder, RVModel,
+│                           #              Alignment, Sv32 vmem, CSR)
 ├── CMakeLists.txt
 └── README.md
 ```
@@ -116,7 +117,7 @@ ECALL-хендлер: `a7=1` → `putchar(a0)`, `a7=10` → halt.
 | Переходы   | `JAL` `JALR`                                             |
 | Загрузка   | `LB` `LH` `LW` `LBU` `LHU`                               |
 | Запись     | `SB` `SH` `SW`                                           |
-| Прочее     | `ECALL` `FENCE` (NOP)                                    |
+| Прочее     | `ECALL` `MRET` `FENCE` `SFENCE.VMA` (NOP)                |
 | M-ext      | `MUL` `MULH` `MULHSU` `MULHU` `DIV` `DIVU` `REM` `REMU`  |
 | A-ext      | `LR.W` `SC.W`+ AMO(SWAP/ADD/XOR/AND/OR/MIN/MAX/MINU/MAXU)|
 | CSR        | `CSRRW` `CSRRS` `CSRRC` `CSRRWI` `CSRRSI` `CSRRCI`       |
@@ -128,11 +129,14 @@ ECALL-хендлер: `a7=1` → `putchar(a0)`, `a7=10` → halt.
 | Ситуация                               | Поведение                          |
 |----------------------------------------|------------------------------------|
 | Обращение за границы памяти            | `std::out_of_range`                |
-| Fetch fault (PC вне памяти)            | `std::runtime_error`               |
-| Load/store fault                       | `std::runtime_error`               |
 | Нелегальный опкод (mtvec=0)            | `std::runtime_error`               |
-| Нелегальный опкод (mtvec≠0)            | `fireTrap` - переход в trap-хендлер|
-| M/A-инструкция при выключенном EXT_M/A | `std::runtime_error`               |
+| Нелегальный опкод (mtvec≠0)            | `fireTrap(EXC_ILLEGAL_INSN)`       |
+| M/A-инструкция при выключенном EXT_M/A | `fireTrap(EXC_ILLEGAL_INSN)`       |
+| LW/SW/AMO невыровненный адрес          | `fireTrap(EXC_LOAD/STORE_MISALIGN)`|
+| LH/SH нечётный адрес                   | `fireTrap(EXC_LOAD/STORE_MISALIGN)`|
+| JAL/JALR/BRANCH невыровненный target   | `fireTrap(EXC_INSN_MISALIGN)`      |
+| Обращение вне памяти (fetch/load/store)| `fireTrap(EXC_*_FAULT)`            |
+| Sv32 страница не отображена            | `fireTrap(EXC_*_PAGE_FAULT)`       |
 | Неизвестная операция в ALU             | `std::invalid_argument`            |
 
 В Debug-сборке дополнительно срабатывают `assert` на:

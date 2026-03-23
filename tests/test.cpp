@@ -260,14 +260,15 @@ static void test_cpu() {
         check("REM 42%6=0", f.cpu.regs().get(14) == 0u);
     }
 
-    CHECK_THROWS("M ext disabled throws",
-                 std::runtime_error,
-                 Fixture({InstrBuilder::ADDI(10, 0, 7),
-                          InstrBuilder::ADDI(11, 0, 6),
-                          InstrBuilder::MUL(12, 10, 11),
-                          InstrBuilder::HALT()},
-                         Config::EXT_NONE)
-                     .cpu.run());
+    {
+        Fixture f({InstrBuilder::ADDI(10, 0, 7),
+                   InstrBuilder::ADDI(11, 0, 6),
+                   InstrBuilder::MUL(12, 10, 11),
+                   InstrBuilder::HALT()},
+                  Config::EXT_NONE);
+        f.cpu.run();
+        check("M ext disabled halts CPU", f.cpu.isHalted());
+    }
 
     CHECK_THROWS(
         "illegal opcode throws", std::runtime_error, Fixture({Word(0xFFFFFFFFu)}).cpu.run());
@@ -294,6 +295,173 @@ static void test_cpu() {
         check("PC starts at 0", cpu.getPC() == 0u);
         cpu.step();
         check("PC advances to 4", cpu.getPC() == 4u);
+    }
+}
+
+static void test_alignment() {
+    std::cout << "\n[ Alignment checks ]\n";
+    using namespace InstrBuilder;
+    using namespace ISA;
+
+    // LW at odd address - halts when mtvec=0
+    {
+        MemoryModel<32> mem(4096);
+        RVModel<32>     cpu(Config{}, mem);
+        loadProgram(mem, {ADDI(10, 0, 1), LW(11, 10, 0), HALT()});
+        cpu.run();
+        check("LW misalign halts CPU", cpu.isHalted());
+    }
+
+    // SW at address 2 - halts when mtvec=0
+    {
+        MemoryModel<32> mem(4096);
+        RVModel<32>     cpu(Config{}, mem);
+        loadProgram(mem, {ADDI(10, 0, 2), ADDI(11, 0, 1), SW(11, 10, 0), HALT()});
+        cpu.run();
+        check("SW misalign halts CPU", cpu.isHalted());
+    }
+
+    // LH at odd address - halts when mtvec=0
+    {
+        MemoryModel<32> mem(4096);
+        RVModel<32>     cpu(Config{}, mem);
+        loadProgram(mem, {ADDI(10, 0, 1), I(0, 10, F3_LH, 11, OP_LOAD), HALT()});
+        cpu.run();
+        check("LH misalign halts CPU", cpu.isHalted());
+    }
+
+    // SH at odd address - halts when mtvec=0
+    {
+        MemoryModel<32> mem(4096);
+        RVModel<32>     cpu(Config{}, mem);
+        loadProgram(mem, {ADDI(10, 0, 1), ADDI(11, 0, 0x42), S(0, 11, 10, F3_SH, OP_STORE), HALT()});
+        cpu.run();
+        check("SH misalign halts CPU", cpu.isHalted());
+    }
+
+    // LW misalign with mtvec set - trap fires, mcause = EXC_LOAD_MISALIGN
+    {
+        MemoryModel<32> mem(4096);
+        RVModel<32>     cpu(Config{}, mem);
+        // trap handler at 0x40: HALT
+        loadProgram(mem, {HALT()}, Addr(0x40));
+        loadProgram(mem, {
+            ADDI(10, 0, 0x40),         // x10 = trap address
+            CSRRW(0, CSR::MTVEC, 10),  // mtvec = 0x40
+            ADDI(11, 0, 1),            // x11 = misaligned address
+            LW(12, 11, 0),             // LW from addr 1 -> misalign trap
+            HALT()
+        });
+        cpu.run();
+        check("LW misalign mcause", cpu.csr().getMCAUSE() == CSR::EXC_LOAD_MISALIGN);
+        check("LW misalign mepc",   cpu.csr().getMEPC()   == 12u);
+        check("LW misalign mtval",  cpu.csr().getMTVAL()  == 1u);
+    }
+}
+
+static void test_vmem() {
+    std::cout << "\n[ Sv32 vmem ]\n";
+    using namespace InstrBuilder;
+    using namespace ISA;
+
+    // bare mode (satp=0): load/store works without page tables
+    {
+        MemoryModel<32> mem(4096);
+        RVModel<32>     cpu(Config{}, mem);
+        loadProgram(mem, {
+            ADDI(10, 0, 512),   // x10 = data address
+            ADDI(11, 0, 0x7F),  // x11 = test value
+            SW(11, 10, 0),      // mem[512] = 0x7F
+            LW(12, 10, 0),      // x12 = mem[512]
+            HALT()
+        });
+        cpu.run();
+        check("bare mode SW/LW", cpu.regs().get(12) == 0x7Fu);
+    }
+
+    // Sv32 identity map: virtual==physical, load/store works after enabling paging
+    //   memory layout (16 KiB):
+    //     0x0000 - program code
+    //     0x1000 - data page
+    //     0x2000 - root page table (entry 0 -> leaf)
+    //     0x3000 - leaf page table (VPN[0]=0..3 identity mapped)
+    {
+        MemoryModel<32> mem(0x4000);
+        RVModel<32>     cpu(Config{}, mem);
+
+        // root_pt[0]: non-leaf pointing to leaf at 0x3000
+        //   leaf_ppn=3, PTE = (3<<10)|PTE_V = 0xC01
+        mem.write(Addr(0x2000), WordT(0xC01u));
+
+        // leaf_pt[0]: VA 0x0000 -> PA 0x0000, PTE = 0*|V|R|W|X = 0x000F
+        mem.write(Addr(0x3000), WordT(0x000Fu));
+        // leaf_pt[1]: VA 0x1000 -> PA 0x1000, ppn=1, PTE = (1<<10)|V|R|W|X = 0x040F
+        mem.write(Addr(0x3004), WordT(0x040Fu));
+        // leaf_pt[2]: VA 0x2000 -> PA 0x2000, ppn=2, PTE = (2<<10)|V|R|W = 0x0807
+        mem.write(Addr(0x3008), WordT(0x0807u));
+        // leaf_pt[3]: VA 0x3000 -> PA 0x3000, ppn=3, PTE = (3<<10)|V|R|W = 0x0C07
+        mem.write(Addr(0x300C), WordT(0x0C07u));
+
+        // satp: Sv32 mode (bit 31) | PPN of root = 2 -> 0x80000002
+        cpu.csr().write(CSR::SATP, 0x80000002u);
+
+        loadProgram(mem, {
+            U(0x1000, 10, OP_LUI),  // x10 = 0x1000 (data VA)
+            ADDI(11, 0, 0x42),      // x11 = 0x42
+            SW(11, 10, 0),          // mem[VA 0x1000] = 0x42
+            LW(12, 10, 0),          // x12 = mem[VA 0x1000]
+            HALT()
+        });
+        cpu.run();
+        check("Sv32 identity SW/LW", cpu.regs().get(12) == 0x42u);
+    }
+
+    // Sv32 load from unmapped page - page fault halts CPU (mtvec=0)
+    {
+        MemoryModel<32> mem(0x4000);
+        RVModel<32>     cpu(Config{}, mem);
+
+        // root_pt[0] -> leaf at 0x3000
+        mem.write(Addr(0x2000), WordT(0xC01u));
+        // leaf_pt[0]: VA 0x0000 mapped (code page)
+        mem.write(Addr(0x3000), WordT(0x000Fu));
+        // leaf_pt[1]: VA 0x1000 NOT mapped (PTE_V=0)
+
+        cpu.csr().write(CSR::SATP, 0x80000002u);
+        loadProgram(mem, {
+            U(0x1000, 10, OP_LUI),  // x10 = 0x1000 (unmapped)
+            LW(11, 10, 0),          // LW from unmapped VA -> page fault -> halt
+            HALT()
+        });
+        cpu.run();
+        check("Sv32 page fault halts CPU", cpu.isHalted());
+    }
+
+    // Sv32 page fault with mtvec set - mcause = EXC_LOAD_PAGE_FAULT
+    {
+        MemoryModel<32> mem(0x4000);
+        RVModel<32>     cpu(Config{}, mem);
+
+        // root_pt[0] -> leaf at 0x3000
+        mem.write(Addr(0x2000), WordT(0xC01u));
+        // leaf_pt[0]: VA 0x0000 mapped (code page only)
+        mem.write(Addr(0x3000), WordT(0x000Fu));
+        // leaf_pt[1]: VA 0x1000 NOT mapped
+
+        // trap handler at 0x40: HALT
+        loadProgram(mem, {HALT()}, Addr(0x40));
+        cpu.csr().write(CSR::SATP, 0x80000002u);
+
+        loadProgram(mem, {
+            ADDI(10, 0, 0x40),          // x10 = trap address
+            CSRRW(0, CSR::MTVEC, 10),   // mtvec = 0x40
+            U(0x1000, 11, OP_LUI),      // x11 = 0x1000 (unmapped)
+            LW(12, 11, 0),              // LW from unmapped VA -> page fault trap
+            HALT()
+        });
+        cpu.run();
+        check("Sv32 page fault mcause", cpu.csr().getMCAUSE() == CSR::EXC_LOAD_PAGE_FAULT);
+        check("Sv32 page fault mtval",  cpu.csr().getMTVAL()  == 0x1000u);
     }
 }
 
@@ -401,6 +569,8 @@ int main() {
     test_alu();
     test_decoder();
     test_cpu();
+    test_alignment();
+    test_vmem();
     test_csr();
     test_config();
 
