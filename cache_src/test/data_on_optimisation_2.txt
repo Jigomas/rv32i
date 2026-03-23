@@ -1,0 +1,107 @@
+std::string test_input = "20 270 7 15 3 12 19 8 4 16 11 1 9 18 6 14 2 10 5 17 13 20 15 7 12 3 8 19 16 4 1 11 18 9 6 14 10 2 17 5 13 20 7 15 3 12 19 8 4 16 11 1 9 18 6 14 2 10 5 17 13 20 15 7 12 3 8 19 16 4 1 11 18 9 6 14 10 2 17 5 13 20 7 15 3 12 19 8 4 16 11 1 9 18 6 14 2 10 5 17 13 20 15 7 12 3 8 19 16 4 1 11 18 9 6 14 10 2 17 5 13 20 7 15 3 12 19 8 4 16 11 1 9 18 6 14 2 10 5 17 13 20 15 7 12 3 8 19 16 4 1 11 18 9 6 14 10 2 17 5 13 20 7 15 3 12 19 8 4 16 11 1 9 18 6 14 2 10 5 17 13 20 15 7 12 3 8 19 16 4 1 11 18 9 6 14 10 2 17 5 13 20 7 15 3 12 19 8 4 16 11 1 9 18 6 14 2 10 5 17 13 20 15 7 12 3 8 19 16 4 1 11 18 9 6 14 10 2 17 5 13 20 7 15 3 12 19 8 4 16 11 1 9 18 6 14 2 10 5 17 13 20 15 7 12 3 8 19 16 4 1 11 18 9 6 14 10 2 17 5 13 20";
+
+
+//////////////////////////////////////////////////////////////////
+вариант 1 cpu_time = 215 398
+
+
+template<typename KeyT, typename ValueT>
+void IdealCache<KeyT, ValueT>::Put(const KeyT& key, const ValueT& value) {
+    if (capacity_ == 0) return;
+
+    ++current_access_index_;
+    UpdateNextUses();
+
+    auto it = data_.find(key);
+    if (it != data_.end()) {
+        it->second.data = value;
+		
+        return;
+    }
+
+    auto seq_it = access_sequence_.find(key);
+    if (seq_it == access_sequence_.end() || seq_it->second.empty()) {
+        return;
+    }
+
+    seq_it->second.pop();
+    
+    if (seq_it->second.empty()) {
+        return;
+    }
+
+    size_t new_next_use = seq_it->second.front();
+
+    if (size_ >= capacity_) {
+        auto max_it = data_.begin();
+        for (auto it = data_.begin(); it != data_.end(); ++it) {
+            if (it->second.next_use > max_it->second.next_use) {
+                max_it = it;
+            }
+        }
+
+        if (new_next_use < max_it->second.next_use) {
+            data_.erase(max_it);
+            --size_;
+        } else {
+            return;
+        }
+    }
+
+    CacheEntry new_entry;
+    new_entry.data = value;
+    new_entry.next_use = new_next_use;
+
+    data_.emplace(key, new_entry);
+    ++size_;
+}
+
+
+
+
+
+//////////////////////////////////////////////////////////////////
+вариант 2 cpu_time = 214 243 
+
+
+template<typename KeyT, typename ValueT>
+void IdealCache<KeyT, ValueT>::Put(const KeyT& key, const ValueT& value) {
+    if (capacity_ == 0) return;
+
+    ++current_access_index_;
+    UpdateNextUses();
+
+    if (data_.find(key) != data_.end()) {
+        data_[key].data = value;
+        return;
+    }
+
+    auto seq_it = access_sequence_.find(key);
+    if (seq_it == access_sequence_.end() || seq_it->second.empty()) {
+        return;
+    }
+
+    seq_it->second.pop();
+    if (seq_it->second.empty()) {
+        return;
+    }
+
+    size_t new_next_use = seq_it->second.front();
+
+    if (size_ >= capacity_) {
+        auto max_it = std::max_element(data_.begin(), data_.end(),
+            [](const auto& a, const auto& b) {
+                return a.second.next_use < b.second.next_use;
+            });
+
+        if (new_next_use >= max_it->second.next_use) {
+            return;
+        }
+        
+        data_.erase(max_it);
+        --size_;
+    }
+
+    data_.emplace(key, CacheEntry{value, new_next_use});
+    ++size_;
+}
