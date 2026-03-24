@@ -3,12 +3,12 @@
 #include <iomanip>
 #include <iostream>
 
-#include "../cache_src/include/cache_model.hpp"
 #include "../include/config.hpp"
 #include "../include/instr_builder.hpp"
 #include "../include/memory_model.hpp"
 #include "../include/rv_model.hpp"
 #include "../include/types.hpp"
+#include "cache_model.hpp"
 
 namespace Reg {
 constexpr uint8_t zero = 0;
@@ -58,8 +58,8 @@ static void run_os(const char* bin_path) {
     MemoryModel<32>       mem(MEM_SIZE);
     f.read(reinterpret_cast<char*>(mem.data()), size);
 
-    CacheModel<32> cache(mem, 64);
-    Config         cfg;
+    CacheModel<32>              cache(mem, 64);
+    Config                      cfg;
     RVModel<32, CacheModel<32>> cpu(cfg, cache);
     cpu.setEcallHandler([](RVModel<32, CacheModel<32>>& c) {
         const uint32_t a7 = c.regs().get(17);
@@ -72,9 +72,8 @@ static void run_os(const char* bin_path) {
     cpu.init(0x0u, static_cast<uint32_t>(MEM_SIZE) - 4u);
     cpu.run();
 
-    std::cout << "\ncache: " << cache.hits() << " hits / " << cache.misses() << " misses"
-              << " | " << std::fixed << std::setprecision(1)
-              << cache.hitRate() * 100.0 << "% hit rate\n";
+    std::cout << "\ncache: " << cache.hits() << " hits / " << cache.misses() << " misses" << " | "
+              << std::fixed << std::setprecision(1) << cache.hitRate() * 100.0 << "% hit rate\n";
 }
 
 int main(int argc, char* argv[]) {

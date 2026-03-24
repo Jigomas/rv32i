@@ -11,6 +11,8 @@
 с расширениями целочисленного умножения (M) и атомарных операций (A). Архитектура Von Neumann,
 single-cycle: один вызов `step()` — один цикл fetch → decode → execute. Для взаимодействия
 с хостом симулятор перехватывает инструкцию `ecall` через C++ callback (`setEcallHandler`).
+Между процессором и памятью можно вставить `CacheModel` — LRU-кэш, который собирает
+статистику попаданий и промахов в реальном времени.
 
 ### Архитектурные решения
 
@@ -25,6 +27,14 @@ single-cycle: один вызов `step()` — один цикл fetch → decod
 **ECALL через callback.** Симулятор не знает ничего про OS — при встрече инструкции `ecall`
 вызывается зарегистрированный хендлер. Это позволяет запускать любую bare-metal программу
 с произвольным набором системных вызовов.
+
+**CacheModel как сменный слой памяти.** `RVModel` принимает тип памяти как шаблонный параметр
+(`RVModel<XLEN, MemT>`), что позволяет подставить `CacheModel<32>` вместо `MemoryModel<32>`
+без изменения ядра симулятора. `CacheModel` реализует LRU-кэш с политикой write-through
+и read-allocate: промах при чтении загружает слово в кэш, запись всегда проходит насквозь
+в `MemoryModel`. Размер кэша — 64 слова (256 байт). После исполнения симулятор печатает
+статистику: количество попаданий, промахов и hit rate. При прогоне ядра XorOS получается
+около 87% попаданий.
 
 ---
 
@@ -48,9 +58,20 @@ rv32i/
 ├── src/
 │   ├── main.cpp            # Демо (3+4)*5=35; run_os(path) — загружает OS бинарник
 │   └── *.cpp               # Явные инстанциации шаблонов для XLEN=32 и XLEN=64
+├── cache_src/              — git subtree: Jigomas/LFU_cache (алгоритм заменён на LRU)
+│   ├── include/
+│   │   ├── cache_model.hpp # CacheModel<XLEN>: LRU-кэш, write-through, read-allocate; hit/miss
+│   │   ├── lfu_cache.hpp   # оригинал: LFU-кэш (не используется симулятором)
+│   │   └── ideal_cache.hpp # оригинал: идеальный кэш Belady (не используется симулятором)
+│   ├── src/
+│   │   ├── lfu_cache.cpp   # оригинал: точка входа LFU
+│   │   └── ideal_cache.cpp # оригинал: точка входа Belady
+│   ├── test/               # оригинальные тестовые данные
+│   ├── CMakeLists.txt      # оригинальный CMake (не подключён к проекту)
+│   └── README.md           # оригинальный README
 ├── tests/
 │   └── test.cpp            # Набор тестов (MemoryModel, RegisterFile, ALU, Decoder, RVModel,
-│                           #              Alignment, Sv32 vmem, CSR)
+│                           #              Alignment, Sv32 vmem, CSR) — 87 тестов
 ├── CMakeLists.txt
 └── README.md
 ```

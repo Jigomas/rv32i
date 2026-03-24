@@ -99,7 +99,10 @@ public:
             return;
 
         const auto paddr_fetch = translateAddr(Addr(pc_), MemAccess::FETCH);
-        if (!paddr_fetch) { ++instrCount_; return; }
+        if (!paddr_fetch) {
+            ++instrCount_;
+            return;
+        }
 
         Word raw;
         try {
@@ -149,7 +152,7 @@ public:
     }
 
     RegisterFile<XLEN>& regs() { return regs_; }
-    CsrFile<XLEN>&      csr()  { return csr_; }
+    CsrFile<XLEN>&      csr() { return csr_; }
     bool                isHalted() const { return halted_; }
     void                halt() { halted_ = true; }
     uint64_t            instrCount() const { return instrCount_; }
@@ -215,7 +218,7 @@ public:
 private:
     UWord              pc_;
     Config             config_;
-    MemT& mem_;
+    MemT&              mem_;
     RegisterFile<XLEN> regs_;
     CsrFile<XLEN>      csr_;
     bool               halted_;
@@ -227,9 +230,12 @@ private:
 
     static UWord pageFaultCause(MemAccess access) {
         switch (access) {
-            case MemAccess::FETCH: return UWord(CSR::EXC_INSN_PAGE_FAULT);
-            case MemAccess::LOAD:  return UWord(CSR::EXC_LOAD_PAGE_FAULT);
-            case MemAccess::STORE: return UWord(CSR::EXC_STORE_PAGE_FAULT);
+            case MemAccess::FETCH:
+                return UWord(CSR::EXC_INSN_PAGE_FAULT);
+            case MemAccess::LOAD:
+                return UWord(CSR::EXC_LOAD_PAGE_FAULT);
+            case MemAccess::STORE:
+                return UWord(CSR::EXC_STORE_PAGE_FAULT);
         }
         return UWord(CSR::EXC_LOAD_PAGE_FAULT);
     }
@@ -250,7 +256,7 @@ private:
 
         for (int lvl = 1; lvl >= 0; --lvl) {
             const Addr pte_addr = static_cast<Addr>(a | (vpn[lvl] << 2u));
-            UWord pte;
+            UWord      pte;
             try {
                 pte = static_cast<UWord>(mem_.readWord(pte_addr));
             } catch (...) {
@@ -263,7 +269,7 @@ private:
                 return std::nullopt;
             }
 
-            if (pte & 0xAu) {  // R=1 or X=1 - leaf PTE
+            if (pte & 0xAu) {                               // R=1 or X=1 - leaf PTE
                 if (lvl == 1 && ((pte >> 10u) & 0x3FFu)) {  // misaligned superpage
                     fireTrap(cause, UWord(va));
                     return std::nullopt;
@@ -271,8 +277,8 @@ private:
                 // superpage: pa = pte.ppn[1]:va.vpn[0]:offset
                 // regular:   pa = pte.ppn:offset
                 const UWord pa = (lvl == 1)
-                    ? (((pte >> 20u) & 0xFFFu) << 22u) | (vpn[0] << 12u) | offset
-                    : ((pte >> 10u) << 12u) | offset;
+                                     ? (((pte >> 20u) & 0xFFFu) << 22u) | (vpn[0] << 12u) | offset
+                                     : ((pte >> 10u) << 12u) | offset;
                 return static_cast<Addr>(pa);
             }
 
@@ -298,10 +304,11 @@ private:
         UWord mstatus = csr_.read(CSR::MSTATUS);
         bool  mie     = (mstatus & UWord(CSR::MSTATUS_MIE)) != UWord(0);
         mstatus &= ~UWord(CSR::MSTATUS_MIE | CSR::MSTATUS_MPIE | CSR::MSTATUS_MPP);
-        if (mie) mstatus |= UWord(CSR::MSTATUS_MPIE);
+        if (mie)
+            mstatus |= UWord(CSR::MSTATUS_MPIE);
         mstatus |= UWord(CSR::MSTATUS_MPP);  // MPP = 11 (M-mode)
         csr_.write(CSR::MSTATUS, mstatus);
-        pc_ = mtvec & ~UWord(3);             // direct mode: BASE & ~3
+        pc_ = mtvec & ~UWord(3);  // direct mode: BASE & ~3
     }
 
     bool executeMRET() {
@@ -309,7 +316,8 @@ private:
         UWord mstatus = csr_.read(CSR::MSTATUS);
         bool  mpie    = (mstatus & UWord(CSR::MSTATUS_MPIE)) != UWord(0);
         mstatus &= ~UWord(CSR::MSTATUS_MIE | CSR::MSTATUS_MPIE);
-        if (mpie) mstatus |= UWord(CSR::MSTATUS_MIE);
+        if (mpie)
+            mstatus |= UWord(CSR::MSTATUS_MIE);
         mstatus |= UWord(CSR::MSTATUS_MPIE);
         csr_.write(CSR::MSTATUS, mstatus);
         pc_ = csr_.getMEPC();
@@ -463,16 +471,19 @@ private:
         }
 
         const auto paddr_load = translateAddr(addr, MemAccess::LOAD);
-        if (!paddr_load) return true;
+        if (!paddr_load)
+            return true;
 
         UWord result = UWord(0);
         try {
             switch (d.funct3) {
                 case F3_LB:
-                    result = static_cast<UWord>(ISA::signExtend<XLEN>(mem_.readByte(*paddr_load), 8));
+                    result =
+                        static_cast<UWord>(ISA::signExtend<XLEN>(mem_.readByte(*paddr_load), 8));
                     break;
                 case F3_LH:
-                    result = static_cast<UWord>(ISA::signExtend<XLEN>(mem_.readHalf(*paddr_load), 16));
+                    result =
+                        static_cast<UWord>(ISA::signExtend<XLEN>(mem_.readHalf(*paddr_load), 16));
                     break;
                 case F3_LW:
                     result = static_cast<UWord>(mem_.readWord(*paddr_load));
@@ -512,7 +523,8 @@ private:
         }
 
         const auto paddr_store = translateAddr(addr, MemAccess::STORE);
-        if (!paddr_store) return true;
+        if (!paddr_store)
+            return true;
 
         try {
             switch (d.funct3) {
@@ -633,7 +645,8 @@ private:
         }
 
         const auto paddr_amo = translateAddr(addr, MemAccess::STORE);
-        if (!paddr_amo) return true;
+        if (!paddr_amo)
+            return true;
 
         if (funct5 == F5_LR) {
             regs_.set(d.rd, static_cast<UWord>(mem_.readWord(*paddr_amo)));

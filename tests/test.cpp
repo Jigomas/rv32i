@@ -334,7 +334,8 @@ static void test_alignment() {
     {
         MemoryModel<32> mem(4096);
         RVModel<32>     cpu(Config{}, mem);
-        loadProgram(mem, {ADDI(10, 0, 1), ADDI(11, 0, 0x42), S(0, 11, 10, F3_SH, OP_STORE), HALT()});
+        loadProgram(mem,
+                    {ADDI(10, 0, 1), ADDI(11, 0, 0x42), S(0, 11, 10, F3_SH, OP_STORE), HALT()});
         cpu.run();
         check("SH misalign halts CPU", cpu.isHalted());
     }
@@ -345,17 +346,16 @@ static void test_alignment() {
         RVModel<32>     cpu(Config{}, mem);
         // trap handler at 0x40: HALT
         loadProgram(mem, {HALT()}, Addr(0x40));
-        loadProgram(mem, {
-            ADDI(10, 0, 0x40),         // x10 = trap address
-            CSRRW(0, CSR::MTVEC, 10),  // mtvec = 0x40
-            ADDI(11, 0, 1),            // x11 = misaligned address
-            LW(12, 11, 0),             // LW from addr 1 -> misalign trap
-            HALT()
-        });
+        loadProgram(mem,
+                    {ADDI(10, 0, 0x40),         // x10 = trap address
+                     CSRRW(0, CSR::MTVEC, 10),  // mtvec = 0x40
+                     ADDI(11, 0, 1),            // x11 = misaligned address
+                     LW(12, 11, 0),             // LW from addr 1 -> misalign trap
+                     HALT()});
         cpu.run();
         check("LW misalign mcause", cpu.csr().getMCAUSE() == CSR::EXC_LOAD_MISALIGN);
-        check("LW misalign mepc",   cpu.csr().getMEPC()   == 12u);
-        check("LW misalign mtval",  cpu.csr().getMTVAL()  == 1u);
+        check("LW misalign mepc", cpu.csr().getMEPC() == 12u);
+        check("LW misalign mtval", cpu.csr().getMTVAL() == 1u);
     }
 }
 
@@ -368,13 +368,12 @@ static void test_vmem() {
     {
         MemoryModel<32> mem(4096);
         RVModel<32>     cpu(Config{}, mem);
-        loadProgram(mem, {
-            ADDI(10, 0, 512),   // x10 = data address
-            ADDI(11, 0, 0x7F),  // x11 = test value
-            SW(11, 10, 0),      // mem[512] = 0x7F
-            LW(12, 10, 0),      // x12 = mem[512]
-            HALT()
-        });
+        loadProgram(mem,
+                    {ADDI(10, 0, 512),   // x10 = data address
+                     ADDI(11, 0, 0x7F),  // x11 = test value
+                     SW(11, 10, 0),      // mem[512] = 0x7F
+                     LW(12, 10, 0),      // x12 = mem[512]
+                     HALT()});
         cpu.run();
         check("bare mode SW/LW", cpu.regs().get(12) == 0x7Fu);
     }
@@ -405,13 +404,12 @@ static void test_vmem() {
         // satp: Sv32 mode (bit 31) | PPN of root = 2 -> 0x80000002
         cpu.csr().write(CSR::SATP, 0x80000002u);
 
-        loadProgram(mem, {
-            U(0x1000, 10, OP_LUI),  // x10 = 0x1000 (data VA)
-            ADDI(11, 0, 0x42),      // x11 = 0x42
-            SW(11, 10, 0),          // mem[VA 0x1000] = 0x42
-            LW(12, 10, 0),          // x12 = mem[VA 0x1000]
-            HALT()
-        });
+        loadProgram(mem,
+                    {U(0x1000, 10, OP_LUI),  // x10 = 0x1000 (data VA)
+                     ADDI(11, 0, 0x42),      // x11 = 0x42
+                     SW(11, 10, 0),          // mem[VA 0x1000] = 0x42
+                     LW(12, 10, 0),          // x12 = mem[VA 0x1000]
+                     HALT()});
         cpu.run();
         check("Sv32 identity SW/LW", cpu.regs().get(12) == 0x42u);
     }
@@ -428,11 +426,10 @@ static void test_vmem() {
         // leaf_pt[1]: VA 0x1000 NOT mapped (PTE_V=0)
 
         cpu.csr().write(CSR::SATP, 0x80000002u);
-        loadProgram(mem, {
-            U(0x1000, 10, OP_LUI),  // x10 = 0x1000 (unmapped)
-            LW(11, 10, 0),          // LW from unmapped VA -> page fault -> halt
-            HALT()
-        });
+        loadProgram(mem,
+                    {U(0x1000, 10, OP_LUI),  // x10 = 0x1000 (unmapped)
+                     LW(11, 10, 0),          // LW from unmapped VA -> page fault -> halt
+                     HALT()});
         cpu.run();
         check("Sv32 page fault halts CPU", cpu.isHalted());
     }
@@ -452,16 +449,15 @@ static void test_vmem() {
         loadProgram(mem, {HALT()}, Addr(0x40));
         cpu.csr().write(CSR::SATP, 0x80000002u);
 
-        loadProgram(mem, {
-            ADDI(10, 0, 0x40),          // x10 = trap address
-            CSRRW(0, CSR::MTVEC, 10),   // mtvec = 0x40
-            U(0x1000, 11, OP_LUI),      // x11 = 0x1000 (unmapped)
-            LW(12, 11, 0),              // LW from unmapped VA -> page fault trap
-            HALT()
-        });
+        loadProgram(mem,
+                    {ADDI(10, 0, 0x40),         // x10 = trap address
+                     CSRRW(0, CSR::MTVEC, 10),  // mtvec = 0x40
+                     U(0x1000, 11, OP_LUI),     // x11 = 0x1000 (unmapped)
+                     LW(12, 11, 0),             // LW from unmapped VA -> page fault trap
+                     HALT()});
         cpu.run();
         check("Sv32 page fault mcause", cpu.csr().getMCAUSE() == CSR::EXC_LOAD_PAGE_FAULT);
-        check("Sv32 page fault mtval",  cpu.csr().getMTVAL()  == 0x1000u);
+        check("Sv32 page fault mtval", cpu.csr().getMTVAL() == 0x1000u);
     }
 }
 
@@ -483,10 +479,10 @@ static void test_csr() {
     // CSRRS: set bits; rs1=x0 → no write
     {
         Fixture f({ADDI(10, 0, 0b1010),
-                   CSRRW(0, CSR::MSCRATCH, 10),    // scratch = 0b1010
+                   CSRRW(0, CSR::MSCRATCH, 10),  // scratch = 0b1010
                    ADDI(11, 0, 0b0101),
-                   CSRRS(12, CSR::MSCRATCH, 11),   // rd=0b1010, scratch=0b1111
-                   CSRRS(13, CSR::MSCRATCH, 0),    // rs1=x0 → no write, rd=0b1111
+                   CSRRS(12, CSR::MSCRATCH, 11),  // rd=0b1010, scratch=0b1111
+                   CSRRS(13, CSR::MSCRATCH, 0),   // rs1=x0 → no write, rd=0b1111
                    HALT()});
         f.cpu.run();
         check("CSRRS old value", f.cpu.regs().get(12) == 0b1010u);
@@ -496,10 +492,10 @@ static void test_csr() {
     // CSRRC: clear bits; rs1=x0 → no write
     {
         Fixture f({ADDI(10, 0, 0b1111),
-                   CSRRW(0, CSR::MSCRATCH, 10),    // scratch = 0b1111
+                   CSRRW(0, CSR::MSCRATCH, 10),  // scratch = 0b1111
                    ADDI(11, 0, 0b0101),
-                   CSRRC(12, CSR::MSCRATCH, 11),   // rd=0b1111, scratch=0b1010
-                   CSRRC(13, CSR::MSCRATCH, 0),    // rs1=x0 → no write, rd=0b1010
+                   CSRRC(12, CSR::MSCRATCH, 11),  // rd=0b1111, scratch=0b1010
+                   CSRRC(13, CSR::MSCRATCH, 0),   // rs1=x0 → no write, rd=0b1010
                    HALT()});
         f.cpu.run();
         check("CSRRC old value", f.cpu.regs().get(12) == 0b1111u);
@@ -541,8 +537,8 @@ static void test_csr() {
     // read-only CSR: write to MHARTID (addr[11:10]=11) is no-op
     {
         Fixture f({ADDI(10, 0, 42),
-                   CSRRW(0, CSR::MHARTID, 10),   // write → no-op (read-only)
-                   CSRRS(11, CSR::MHARTID, 0),   // read
+                   CSRRW(0, CSR::MHARTID, 10),  // write → no-op (read-only)
+                   CSRRS(11, CSR::MHARTID, 0),  // read
                    HALT()});
         f.cpu.run();
         check("read-only CSR stays 0", f.cpu.regs().get(11) == 0u);

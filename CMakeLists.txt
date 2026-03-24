@@ -4,6 +4,7 @@ project(rv32i_cpu LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Build type default
 if(NOT CMAKE_BUILD_TYPE)
@@ -44,6 +45,7 @@ target_include_directories(rv32i_lib PUBLIC include)
 
 # Main executable
 add_executable(rv32i_cpu src/main.cpp)
+target_include_directories(rv32i_cpu PRIVATE cache_src/include)
 target_link_libraries(rv32i_cpu PRIVATE rv32i_lib)
 
 # Test executable

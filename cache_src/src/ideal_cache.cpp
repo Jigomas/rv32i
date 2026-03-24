@@ -1,22 +1,16 @@
-#include <iostream>
-#include <vector>
-#include <unordered_map>
-
 #include "../include/ideal_cache.hpp"
 
-
+#include <iostream>
+#include <unordered_map>
+#include <vector>
 
 size_t RunIdeal();
-
-
 
 int main() {
     size_t hit_count = RunIdeal();
     std::cout << hit_count << std::endl;
     return 0;
 }
-
-
 
 size_t RunIdeal() {
     size_t cache_size, element_count;
@@ -26,7 +20,7 @@ size_t RunIdeal() {
     }
 
     IdealCache<int, int> cache(cache_size);
-    std::vector<int> elements;
+    std::vector<int>     elements;
     elements.reserve(element_count);
     std::unordered_map<int, std::vector<size_t>> access_map;
 
@@ -47,15 +41,15 @@ size_t RunIdeal() {
     size_t hit_count = 0;
     for (size_t i = 0; i < element_count; ++i) {
         int element = elements[i];
-        
+
         if (cache.Contains(element)) {
             ++hit_count;
             cache.Put(element, element, i);
         } else {
             cache.Put(element, element, i);
         }
-        
-        //cache.DumpCache();
+
+        // cache.DumpCache();
     }
 
     return hit_count;

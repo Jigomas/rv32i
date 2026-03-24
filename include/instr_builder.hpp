@@ -103,12 +103,24 @@ inline Word CSR(uint16_t csrAddr, uint8_t rs1, uint8_t funct3, uint8_t rd) {
     return (Word(csrAddr) << 20) | (Word(rs1) << 15) | (Word(funct3) << 12) | (Word(rd) << 7) |
            Word(OP_SYSTEM);
 }
-inline Word CSRRW(uint8_t rd, uint16_t csr, uint8_t rs1) { return CSR(csr, rs1, F3_CSRRW, rd); }
-inline Word CSRRS(uint8_t rd, uint16_t csr, uint8_t rs1) { return CSR(csr, rs1, F3_CSRRS, rd); }
-inline Word CSRRC(uint8_t rd, uint16_t csr, uint8_t rs1) { return CSR(csr, rs1, F3_CSRRC, rd); }
-inline Word CSRRWI(uint8_t rd, uint16_t csr, uint8_t zimm) { return CSR(csr, zimm, F3_CSRRWI, rd); }
-inline Word CSRRSI(uint8_t rd, uint16_t csr, uint8_t zimm) { return CSR(csr, zimm, F3_CSRRSI, rd); }
-inline Word CSRRCI(uint8_t rd, uint16_t csr, uint8_t zimm) { return CSR(csr, zimm, F3_CSRRCI, rd); }
+inline Word CSRRW(uint8_t rd, uint16_t csr, uint8_t rs1) {
+    return CSR(csr, rs1, F3_CSRRW, rd);
+}
+inline Word CSRRS(uint8_t rd, uint16_t csr, uint8_t rs1) {
+    return CSR(csr, rs1, F3_CSRRS, rd);
+}
+inline Word CSRRC(uint8_t rd, uint16_t csr, uint8_t rs1) {
+    return CSR(csr, rs1, F3_CSRRC, rd);
+}
+inline Word CSRRWI(uint8_t rd, uint16_t csr, uint8_t zimm) {
+    return CSR(csr, zimm, F3_CSRRWI, rd);
+}
+inline Word CSRRSI(uint8_t rd, uint16_t csr, uint8_t zimm) {
+    return CSR(csr, zimm, F3_CSRRSI, rd);
+}
+inline Word CSRRCI(uint8_t rd, uint16_t csr, uint8_t zimm) {
+    return CSR(csr, zimm, F3_CSRRCI, rd);
+}
 
 // A-extension: AMO instructions
 inline Word AMO(uint8_t funct5, bool aq, bool rl, uint8_t rs2, uint8_t rs1, uint8_t rd) {

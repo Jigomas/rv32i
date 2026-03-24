@@ -40,14 +40,14 @@ constexpr uint32_t MTVEC_MODE_VECTORED = 0b1u;  // async to BASE + 4*cause
 constexpr uint32_t MCAUSE_INTERRUPT = (1u << 31);
 
 // exception codes
-constexpr uint32_t EXC_INSN_MISALIGN  = 0b0000u;  // instruction address misaligned
-constexpr uint32_t EXC_INSN_FAULT     = 0b0001u;  // instruction access fault
-constexpr uint32_t EXC_ILLEGAL_INSN   = 0b0010u;  // illegal instruction
-constexpr uint32_t EXC_BREAKPOINT     = 0b0011u;  // breakpoint
-constexpr uint32_t EXC_LOAD_MISALIGN  = 0b0100u;  // load address misaligned
-constexpr uint32_t EXC_LOAD_FAULT     = 0b0101u;  // load access fault
-constexpr uint32_t EXC_STORE_MISALIGN = 0b0110u;  // store address misaligned
-constexpr uint32_t EXC_STORE_FAULT    = 0b0111u;  // store access fault
+constexpr uint32_t EXC_INSN_MISALIGN    = 0b0000u;  // instruction address misaligned
+constexpr uint32_t EXC_INSN_FAULT       = 0b0001u;  // instruction access fault
+constexpr uint32_t EXC_ILLEGAL_INSN     = 0b0010u;  // illegal instruction
+constexpr uint32_t EXC_BREAKPOINT       = 0b0011u;  // breakpoint
+constexpr uint32_t EXC_LOAD_MISALIGN    = 0b0100u;  // load address misaligned
+constexpr uint32_t EXC_LOAD_FAULT       = 0b0101u;  // load access fault
+constexpr uint32_t EXC_STORE_MISALIGN   = 0b0110u;  // store address misaligned
+constexpr uint32_t EXC_STORE_FAULT      = 0b0111u;  // store access fault
 constexpr uint32_t EXC_ECALL_U          = 0b1000u;  // ecall from U-mode
 constexpr uint32_t EXC_ECALL_M          = 0b1011u;  // ecall from M-mode
 constexpr uint32_t EXC_INSN_PAGE_FAULT  = 12u;      // instruction page fault
@@ -136,11 +136,11 @@ public:
         return old;
     }
 
-    bool  getMIE()      const { return (regs_[CSR::MSTATUS] & UWord(CSR::MSTATUS_MIE)) != 0; }
-    UWord getMTVEC()    const { return regs_[CSR::MTVEC]; }
-    UWord getMEPC()     const { return regs_[CSR::MEPC]; }
-    UWord getMCAUSE()   const { return regs_[CSR::MCAUSE]; }
-    UWord getMTVAL()    const { return regs_[CSR::MTVAL]; }
+    bool  getMIE() const { return (regs_[CSR::MSTATUS] & UWord(CSR::MSTATUS_MIE)) != 0; }
+    UWord getMTVEC() const { return regs_[CSR::MTVEC]; }
+    UWord getMEPC() const { return regs_[CSR::MEPC]; }
+    UWord getMCAUSE() const { return regs_[CSR::MCAUSE]; }
+    UWord getMTVAL() const { return regs_[CSR::MTVAL]; }
     UWord getMSCRATCH() const { return regs_[CSR::MSCRATCH]; }
 
     void setMIE(bool enable) {
@@ -150,9 +150,9 @@ public:
             regs_[CSR::MSTATUS] &= ~UWord(CSR::MSTATUS_MIE);
     }
 
-    void setMEPC(UWord val)   { regs_[CSR::MEPC]   = val; }
+    void setMEPC(UWord val) { regs_[CSR::MEPC] = val; }
     void setMCAUSE(UWord val) { regs_[CSR::MCAUSE] = val; }
-    void setMTVAL(UWord val)  { regs_[CSR::MTVAL]  = val; }
+    void setMTVAL(UWord val) { regs_[CSR::MTVAL] = val; }
 
     void dump() const {
         std::cout << "\n=== CSR FILE (XLEN=" << XLEN << ") ===\n";
@@ -160,9 +160,14 @@ public:
             const char* name;
             uint16_t    addr;
         } entries[] = {
-            {"mstatus ", CSR::MSTATUS}, {"mie     ", CSR::MIE},      {"mtvec   ", CSR::MTVEC},
-            {"mscratch", CSR::MSCRATCH}, {"mepc    ", CSR::MEPC},    {"mcause  ", CSR::MCAUSE},
-            {"mtval   ", CSR::MTVAL},   {"mip     ", CSR::MIP},
+            {"mstatus ", CSR::MSTATUS},
+            {"mie     ", CSR::MIE},
+            {"mtvec   ", CSR::MTVEC},
+            {"mscratch", CSR::MSCRATCH},
+            {"mepc    ", CSR::MEPC},
+            {"mcause  ", CSR::MCAUSE},
+            {"mtval   ", CSR::MTVAL},
+            {"mip     ", CSR::MIP},
         };
         for (const auto& e : entries) {
             std::cout << e.name << ": 0x" << std::hex << std::setw(XLEN / 4) << std::setfill('0')
@@ -175,4 +180,4 @@ private:
 
     // csr[11:10] == 11 means read-only (RISC-V Privileged Spec)
     static bool isReadOnly(uint16_t addr) { return (addr >> 10u) == 0b11u; }
-}; 
+};

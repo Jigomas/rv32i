@@ -21,11 +21,11 @@ public:
     explicit CacheModel(MemoryModel<XLEN>& backing, size_t capacity = 64)
         : backing_(backing), capacity_(capacity) {}
 
-    ~CacheModel()                              = default;
-    CacheModel(const CacheModel&)              = delete;
-    CacheModel& operator=(const CacheModel&)   = delete;
-    CacheModel(CacheModel&&) noexcept          = delete;
-    CacheModel& operator=(CacheModel&&)        = delete;
+    ~CacheModel()                            = default;
+    CacheModel(const CacheModel&)            = delete;
+    CacheModel& operator=(const CacheModel&) = delete;
+    CacheModel(CacheModel&&) noexcept        = delete;
+    CacheModel& operator=(CacheModel&&)      = delete;
 
     ByteT readByte(Addr addr) {
         const WordT w = fetchWord(addr & ~Addr(0b11u));
@@ -82,15 +82,15 @@ public:
     // expose backing so binary can be loaded directly before wrapping
     uint8_t* data() { return backing_.data(); }
 
-    uint64_t hits()     const { return hits_; }
-    uint64_t misses()   const { return misses_; }
+    uint64_t hits() const { return hits_; }
+    uint64_t misses() const { return misses_; }
     uint64_t accesses() const { return hits_ + misses_; }
-    double   hitRate()  const {
+    double   hitRate() const {
         const uint64_t total = hits_ + misses_;
         return total > 0 ? static_cast<double>(hits_) / static_cast<double>(total) : 0.0;
     }
-    size_t   size()     const { return index_.size(); }
-    size_t   capacity() const { return capacity_; }
+    size_t size() const { return index_.size(); }
+    size_t capacity() const { return capacity_; }
 
 private:
     struct Line {
@@ -118,18 +118,19 @@ private:
 
     void patchCached(Addr word_addr, Addr byte_off, unsigned width, WordT val) {
         auto it = index_.find(word_addr);
-        if (it == index_.end()) return;
+        if (it == index_.end())
+            return;
         const WordT    mask  = (width == 1) ? WordT(0xFFu) : WordT(0xFFFFu);
         const uint32_t shift = static_cast<uint32_t>(byte_off) * 8u;
-        it->second->value = (it->second->value & ~(mask << shift)) | ((val & mask) << shift);
+        it->second->value    = (it->second->value & ~(mask << shift)) | ((val & mask) << shift);
         lru_.splice(lru_.begin(), lru_, it->second);
     }
 
-    MemoryModel<XLEN>&   backing_;
-    size_t               capacity_;
-    uint64_t             hits_   = 0;
-    uint64_t             misses_ = 0;
+    MemoryModel<XLEN>& backing_;
+    size_t             capacity_;
+    uint64_t           hits_   = 0;
+    uint64_t           misses_ = 0;
 
-    std::list<Line>      lru_;
+    std::list<Line>                                              lru_;
     std::unordered_map<Addr, typename std::list<Line>::iterator> index_;
 };
