@@ -14,3 +14,10 @@ foreach(target lfu_cache ideal_cache)
     target_include_directories(${target} PRIVATE include)
     target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic)
 endforeach()
+
+add_executable(lfu_tests tests/test_lfu.cpp)
+target_include_directories(lfu_tests PRIVATE include)
+target_compile_options(lfu_tests PRIVATE -Wall -Wextra -Wpedantic)
+
+enable_testing()
+add_test(NAME lfu_tests COMMAND lfu_tests)
