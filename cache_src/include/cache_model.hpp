@@ -6,7 +6,7 @@
 #include "../../include/types.hpp"
 
 // LRU cache model that wraps a MemoryModel and intercepts all reads/writes.
-// Granularity: 4-byte words.  Policy: write-through, read-allocate.
+// 4-byte words, write-through, read-allocate.
 //
 // Based on Jigomas/LFU_cache — algorithm replaced with LRU.
 // Evicts the least-recently-used word when the cache is full.

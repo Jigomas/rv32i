@@ -27,15 +27,3 @@ O(1) продвижение в начало списка через `splice`. Х
 | `CMakeLists.txt`         | Сборка оригинала (не подключена к XorOS)      |
 
 ---
-
-## Использование в симуляторе
-
-```cpp
-MemoryModel<32>             mem(0x10000);
-CacheModel<32>              cache(mem, 64);   // 64-словный LRU
-RVModel<32, CacheModel<32>> cpu(cfg, cache);
-cpu.run();
-
-std::cout << cache.hits() << " hits / " << cache.misses() << " misses\n";
-std::cout << cache.hitRate() * 100.0 << "% hit rate\n";
-```

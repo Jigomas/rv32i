@@ -44,7 +44,7 @@ add_library(rv32i_lib STATIC
 target_include_directories(rv32i_lib PUBLIC include)
 
 # Main executable
-add_executable(rv32i_cpu src/main.cpp)
+add_executable(rv32i_cpu src/main.cpp cache_src/src/cache_model.cpp)
 target_include_directories(rv32i_cpu PRIVATE cache_src/include)
 target_link_libraries(rv32i_cpu PRIVATE rv32i_lib)
 
