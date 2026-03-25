@@ -16,7 +16,7 @@ public:
 
     static constexpr size_t DEFAULT_SIZE = 1u << 20;  // 1 MiB
 
-    explicit MemoryModel(size_t size = DEFAULT_SIZE) : data_(size, 0u), size_(size) {
+    explicit MemoryModel(size_t size = DEFAULT_SIZE) : data_(size, 0u) {
         assert(size > 0 && "MemoryModel: size must be > 0");
     }
 
@@ -26,26 +26,22 @@ public:
     MemoryModel(MemoryModel&&) noexcept            = default;
     MemoryModel& operator=(MemoryModel&&) noexcept = default;
 
-    // lvalue overload (copies)
     void loadProgram(const std::vector<uint8_t>& program, Addr base = 0) {
         assert(!program.empty() && "loadProgram: program must not be empty");
-        if (static_cast<size_t>(base) + program.size() > size_) {
-            throw std::out_of_range("MemoryModel::loadProgram — program exceeds memory: base=0x" +
-                                    std::to_string(base) +
-                                    " size=" + std::to_string(program.size()) +
-                                    " limit=" + std::to_string(size_));
+        if (static_cast<size_t>(base) + program.size() > data_.size()) {
+            throw std::out_of_range("MemoryModel::loadProgram — program exceeds memory: base=" +
+                                    toHex(base) + " size=" + std::to_string(program.size()) +
+                                    " limit=" + std::to_string(data_.size()));
         }
         std::copy(program.begin(), program.end(), data_.begin() + static_cast<ptrdiff_t>(base));
     }
 
-    // rvalue overload (moves)
     void loadProgram(std::vector<uint8_t>&& program, Addr base = 0) {
         assert(!program.empty() && "loadProgram: program must not be empty");
-        if (static_cast<size_t>(base) + program.size() > size_) {
-            throw std::out_of_range("MemoryModel::loadProgram — program exceeds memory: base=0x" +
-                                    std::to_string(base) +
-                                    " size=" + std::to_string(program.size()) +
-                                    " limit=" + std::to_string(size_));
+        if (static_cast<size_t>(base) + program.size() > data_.size()) {
+            throw std::out_of_range("MemoryModel::loadProgram — program exceeds memory: base=" +
+                                    toHex(base) + " size=" + std::to_string(program.size()) +
+                                    " limit=" + std::to_string(data_.size()));
         }
         std::move(program.begin(), program.end(), data_.begin() + static_cast<ptrdiff_t>(base));
     }
@@ -94,14 +90,14 @@ public:
                   << "] ===\n";
         for (size_t i = 0; i < count; i += 4) {
             Addr a = from + static_cast<Addr>(i);
-            if (static_cast<size_t>(a) + 4 <= size_)
+            if (static_cast<size_t>(a) + 4 <= data_.size())
                 std::cout << "0x" << std::setw(8) << std::setfill('0') << a << ": 0x"
                           << std::setw(8) << readWord(a) << "\n";
         }
         std::cout << std::dec;
     }
 
-    size_t   size() const { return size_; }
+    size_t   size() const { return data_.size(); }
     uint8_t* data() { return data_.data(); }
 
     // A-extension: LR/SC
@@ -122,15 +118,15 @@ public:
 
 private:
     std::vector<uint8_t> data_;
-    size_t               size_;
     Addr                 lr_addr_  = Addr(0);
     bool                 lr_valid_ = false;
 
     void checkBounds(Addr addr, size_t width) const {
         assert((width == 1 || width == 2 || width == 4) && "checkBounds: width must be 1, 2, or 4");
-        if (static_cast<size_t>(addr) + width > size_) {
-            throw std::out_of_range("MemoryModel: OOB addr=0x" + std::to_string(addr) + " width=" +
-                                    std::to_string(width) + " limit=" + std::to_string(size_));
+        if (static_cast<size_t>(addr) + width > data_.size()) {
+            throw std::out_of_range("MemoryModel: OOB addr=" + toHex(addr) +
+                                    " width=" + std::to_string(width) +
+                                    " limit=" + std::to_string(data_.size()));
         }
     }
 };

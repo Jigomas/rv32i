@@ -1,17 +1,15 @@
 #pragma once
+#include <cassert>
 #include <cstdint>
-#include <stdexcept>
 
 struct Config {
-    static constexpr int XLEN = 32;
-
     enum Extension : uint32_t {
-        EXT_NONE = 0,
-        EXT_M    = (1u << 0),  // Integer multiply/divide
-        EXT_A    = (1u << 1),  // Atomic ops
-        EXT_F    = (1u << 2),  // Float 32-bit       [stub]
-        EXT_D    = (1u << 3),  // Double 64-bit      [stub]
-        EXT_C    = (1u << 4),  // Compressed 16-bit  [stub]
+        EXT_NONE = 0b00000,
+        EXT_M    = 0b00001,  // Integer multiply/divide
+        EXT_A    = 0b00010,  // Atomic ops
+        EXT_F    = 0b00100,  // Float 32-bit       [not implemented]
+        EXT_D    = 0b01000,  // Double 64-bit      [not implemented]
+        EXT_C    = 0b10000,  // Compressed 16-bit  [not implemented]
     };
 
     uint32_t extensions;
@@ -21,9 +19,8 @@ struct Config {
     bool hasExtension(Extension e) const { return (extensions & static_cast<uint32_t>(e)) != 0; }
 
     void validate() const {
-        constexpr uint32_t IMPLEMENTED = EXT_NONE | EXT_M | EXT_A;
-        if (extensions & ~IMPLEMENTED) {
-            throw std::invalid_argument("Config: extension not implemented (F/D/C are stubs)");
-        }
+        constexpr uint32_t IMPLEMENTED = EXT_M | EXT_A;
+        assert(!(extensions & ~IMPLEMENTED) &&
+               "Config: extension not implemented (F/D/C are stubs)");
     }
 };

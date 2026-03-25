@@ -407,8 +407,8 @@ private:
                     fireTrap(UWord(CSR::EXC_ILLEGAL_INSN), UWord(d.opcode));
                     return true;
                 }
-                throw std::runtime_error("RVModel: illegal opcode 0x" + std::to_string(d.opcode) +
-                                         " at PC=0x" + std::to_string(pc_));
+                throw std::runtime_error("RVModel: illegal opcode " + toHex(d.opcode) +
+                                         " at PC=" + toHex(pc_));
         }
     }
 

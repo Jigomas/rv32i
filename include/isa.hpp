@@ -6,6 +6,7 @@
 
 namespace ISA {
 
+// Opcode - bits [6:0]
 enum Opcode : uint8_t {
     OP_LOAD     = 0b0000011,
     OP_MISC_MEM = 0b0001111,
@@ -22,6 +23,7 @@ enum Opcode : uint8_t {
     OP_SYSTEM = 0b1110011,
 };
 
+// Funct3 - bits [14:12]
 enum Funct3ALU : uint8_t {
     F3_ADD_SUB = 0b000,
     F3_SLL     = 0b001,
@@ -42,12 +44,6 @@ enum Funct3MUL : uint8_t {
     F3_DIVU   = 0b101,
     F3_REM    = 0b110,
     F3_REMU   = 0b111,
-};
-
-enum Funct7 : uint8_t {
-    F7_NORMAL = 0b0000000,
-    F7_ALT    = 0b0100000,
-    F7_MEXT   = 0b0000001,
 };
 
 enum Funct3Branch : uint8_t {
@@ -87,6 +83,7 @@ enum Funct3AMO : uint8_t {
     F3_AMO_W = 0b010,
 };
 
+// Funct5 - bits [31:27]
 enum Funct5AMO : uint8_t {
     F5_AMOADD  = 0b00000,
     F5_AMOSWAP = 0b00001,
@@ -99,6 +96,13 @@ enum Funct5AMO : uint8_t {
     F5_AMOMAX  = 0b10100,
     F5_AMOMINU = 0b11000,
     F5_AMOMAXU = 0b11100,
+};
+
+// Funct7 - bits [31:25]
+enum Funct7 : uint8_t {
+    F7_NORMAL = 0b0000000,
+    F7_ALT    = 0b0100000,
+    F7_MEXT   = 0b0000001,
 };
 
 inline Word extractBits(Word instr, int hi, int lo) {
@@ -161,7 +165,6 @@ inline typename XlenTraits<XLEN>::SWord decodeImmB(Word i) {
     return signExtend<XLEN>((b12 << 12) | (b11 << 11) | (b10_5 << 5) | (b4_1 << 1), 13);
 }
 
-// U-type immediate: upper 20 bits, [11:0] = 0
 inline Word decodeImmU(Word i) {
     return i & 0xFFFFF000u;
 }
