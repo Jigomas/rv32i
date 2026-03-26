@@ -14,18 +14,18 @@ constexpr uint16_t MARCHID   = 0xF12;  // architecture id
 constexpr uint16_t MIMPID    = 0xF13;  // implementation id
 constexpr uint16_t MHARTID   = 0xF14;  // hart id (amount of cores = 1 => 0)
 
-constexpr uint16_t SATP     = 0x180;  // supervisor address translation (Sv32)
-constexpr uint16_t MSTATUS  = 0x300;  // machine status
-constexpr uint16_t MISA     = 0x301;  // ISA and extensions
-constexpr uint16_t MIE      = 0x304;  // machine interrupt enable
-constexpr uint16_t MTVEC    = 0x305;  // trap-handler base address
-constexpr uint16_t MSCRATCH = 0x340;  // trap scratch
-constexpr uint16_t MEPC     = 0x341;  // exception PC
-constexpr uint16_t MCAUSE   = 0x342;  // trap cause
-constexpr uint16_t MTVAL    = 0x343;  // bad addr or instruction
-constexpr uint16_t MIP      = 0x344;  // machine interrupt pending
-constexpr uint16_t MCYCLE   = 0xB00;  // cycle counter
-constexpr uint16_t MINSTRET = 0xB02;  // instructions retired
+constexpr uint16_t SATP     = 0x180u;  // supervisor address translation (Sv32)
+constexpr uint16_t MSTATUS  = 0x300u;  // machine status
+constexpr uint16_t MISA     = 0x301u;  // ISA and extensions
+constexpr uint16_t MIE      = 0x304u;  // machine interrupt enable
+constexpr uint16_t MTVEC    = 0x305u;  // trap-handler base address
+constexpr uint16_t MSCRATCH = 0x340u;  // trap scratch
+constexpr uint16_t MEPC     = 0x341u;  // exception PC
+constexpr uint16_t MCAUSE   = 0x342u;  // trap cause
+constexpr uint16_t MTVAL    = 0x343u;  // bad addr or instruction
+constexpr uint16_t MIP      = 0x344u;  // machine interrupt pending
+constexpr uint16_t MCYCLE   = 0xB00u;  // cycle counter
+constexpr uint16_t MINSTRET = 0xB02u;  // instructions retired
 
 // mstatus
 constexpr uint32_t MSTATUS_MIE  = (1u << 3);   // global machine interrupt enable
@@ -178,6 +178,7 @@ public:
 private:
     std::array<UWord, NUM_CSRS> regs_;
 
-    // csr[11:10] == 11 means read-only (RISC-V Privileged Spec)
+    // csr bits[11:10] == 11 means read-only
+    // 00, 01, 10 - read-write
     static bool isReadOnly(uint16_t addr) { return (addr >> 10u) == 0b11u; }
 };

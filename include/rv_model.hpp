@@ -486,7 +486,8 @@ private:
                         static_cast<UWord>(ISA::signExtend<XLEN>(mem_.readHalf(*paddr_load), 16));
                     break;
                 case F3_LW:
-                    result = static_cast<UWord>(mem_.readWord(*paddr_load));
+                    result = static_cast<UWord>(
+                        static_cast<SWord>(static_cast<int32_t>(mem_.readWord(*paddr_load))));
                     break;
                 case F3_LBU:
                     result = static_cast<UWord>(mem_.readByte(*paddr_load));

@@ -48,6 +48,7 @@ rv32i/
 │   ├── isa.hpp             # Opcode/Funct3/Funct7/Funct5AMO; extractBits, signExtend;
 │   │                       # геттеры полей (getOpcode/getRd/...); декодеры immediate (I/S/B/U/J)
 │   ├── decoder.hpp         # DecodedInstr<XLEN>; Decoder<XLEN>::decode(raw)
+│   ├── disasm.hpp          # Disasm::disassemble(DecodedInstr) → строка; ABI-имена регистров
 │   ├── register_file.hpp   # RegisterFile<XLEN>: 32 рег, x0=0;
 │   │                       # RegRole (Preserved/NonPreserved/Special), ABI_NAMES[]
 │   ├── memory_model.hpp    # MemoryModel<XLEN>: плоская память, LR/SC reservation
@@ -71,7 +72,7 @@ rv32i/
 │   └── README.md           # оригинальный README
 ├── tests/
 │   └── test.cpp            # Набор тестов (MemoryModel, RegisterFile, ALU, Decoder, RVModel,
-│                           #              Alignment, Sv32 vmem, CSR) — 87 тестов
+│                           #              Alignment, Sv32 vmem, CSR, Disasm) — 100 тестов
 ├── CMakeLists.txt
 └── README.md
 ```

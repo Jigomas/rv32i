@@ -19,8 +19,10 @@ struct Config {
     bool hasExtension(Extension e) const { return (extensions & static_cast<uint32_t>(e)) != 0; }
 
     void validate() const {
+#ifndef NDEBUG
         constexpr uint32_t IMPLEMENTED = EXT_M | EXT_A;
         assert(!(extensions & ~IMPLEMENTED) &&
                "Config: extension not implemented (F/D/C are stubs)");
+#endif
     }
 };

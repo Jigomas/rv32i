@@ -81,8 +81,35 @@ inline Word ADD(uint8_t rd, uint8_t rs1, uint8_t rs2) {
 inline Word SUB(uint8_t rd, uint8_t rs1, uint8_t rs2) {
     return R(F7_ALT, rs2, rs1, F3_ADD_SUB, rd, OP_OP);
 }
+inline Word LUI(uint8_t rd, int32_t imm20) {
+    return U(imm20 << 12, rd, OP_LUI);
+}
+inline Word AUIPC(uint8_t rd, int32_t imm20) {
+    return U(imm20 << 12, rd, OP_AUIPC);
+}
+inline Word SLLI(uint8_t rd, uint8_t rs1, uint8_t shamt) {
+    return R(F7_NORMAL, shamt, rs1, F3_SLL, rd, OP_OP_IMM);
+}
+inline Word SRLI(uint8_t rd, uint8_t rs1, uint8_t shamt) {
+    return R(F7_NORMAL, shamt, rs1, F3_SRL_SRA, rd, OP_OP_IMM);
+}
+inline Word SRAI(uint8_t rd, uint8_t rs1, uint8_t shamt) {
+    return R(F7_ALT, shamt, rs1, F3_SRL_SRA, rd, OP_OP_IMM);
+}
+inline Word BEQ(uint8_t rs1, uint8_t rs2, int16_t offset) {
+    return B(offset, rs2, rs1, F3_BEQ, OP_BRANCH);
+}
+inline Word BNE(uint8_t rs1, uint8_t rs2, int16_t offset) {
+    return B(offset, rs2, rs1, F3_BNE, OP_BRANCH);
+}
 inline Word MUL(uint8_t rd, uint8_t rs1, uint8_t rs2) {
     return R(F7_MEXT, rs2, rs1, F3_MUL, rd, OP_OP);
+}
+inline Word DIV(uint8_t rd, uint8_t rs1, uint8_t rs2) {
+    return R(F7_MEXT, rs2, rs1, F3_DIV, rd, OP_OP);
+}
+inline Word ECALL() {
+    return Word(OP_SYSTEM);
 }
 inline Word LW(uint8_t rd, uint8_t rs1, int16_t offset) {
     return I(offset, rs1, F3_LW, rd, OP_LOAD);
@@ -174,13 +201,6 @@ inline void loadProgram(MemoryModel<XLEN>&              mem,
         bytes.push_back(static_cast<uint8_t>((w >> 24) & 0xFFu));
     }
     mem.loadProgram(std::move(bytes), base);
-}
-
-template <int XLEN = 32>
-inline void loadProgram(MemoryModel<XLEN>&              mem,
-                        std::vector<Word>&&             prog,
-                        typename XlenTraits<XLEN>::Addr base = 0) {
-    loadProgram<XLEN>(mem, static_cast<const std::vector<Word>&>(prog), base);
 }
 
 }  // namespace InstrBuilder

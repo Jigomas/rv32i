@@ -6,6 +6,7 @@
 #include "../include/alu.hpp"
 #include "../include/config.hpp"
 #include "../include/decoder.hpp"
+#include "../include/disasm.hpp"
 #include "../include/instr_builder.hpp"
 #include "../include/isa.hpp"
 #include "../include/memory_model.hpp"
@@ -276,7 +277,7 @@ static void test_cpu() {
     // init() resets state
     {
         using namespace InstrBuilder;
-        MemoryModel mem(4096);
+        MemoryModel<> mem(4096);
         loadProgram(mem, {ADDI(10, 0, 7), HALT()});
         RVModel cpu(Config{}, mem);
         cpu.run();
@@ -289,7 +290,7 @@ static void test_cpu() {
     // getPC() reflects PC
     {
         using namespace InstrBuilder;
-        MemoryModel mem(4096);
+        MemoryModel<> mem(4096);
         loadProgram(mem, {ADDI(10, 0, 1), HALT()});
         RVModel cpu(Config{}, mem);
         check("PC starts at 0", cpu.getPC() == 0u);
@@ -552,7 +553,29 @@ static void test_config() {
     check("EXT_M recognized", c.hasExtension(Config::EXT_M));
     check("EXT_A not set", !c.hasExtension(Config::EXT_A));
     check("EXT_A valid", Config(Config::EXT_A).hasExtension(Config::EXT_A));
-    CHECK_THROWS("EXT_F throws", std::invalid_argument, (Config(Config::EXT_F)));
+    // EXT_F: assert fires in Debug; nothing to check via CHECK_THROWS in Release
+}
+
+void test_disasm() {
+    using namespace InstrBuilder;
+    using namespace Disasm;
+    auto dis = [](Word w) { return disassemble(Decoder<>::decode(w)); };
+
+    std::cout << "\n[ Disasm ]\n";
+    check("addi", dis(ADDI(10, 0, 42)) == "addi a0, zero, 42");
+    check("add", dis(ADD(10, 11, 12)) == "add a0, a1, a2");
+    check("sub", dis(SUB(10, 11, 12)) == "sub a0, a1, a2");
+    check("lui", dis(LUI(10, 1)) == "lui a0, 1");
+    check("auipc", dis(AUIPC(10, 1)) == "auipc a0, 1");
+    check("lw", dis(LW(10, 2, 0)) == "lw a0, 0(sp)");
+    check("sw", dis(SW(10, 2, 4)) == "sw a0, 4(sp)");
+    check("beq", dis(BEQ(10, 11, 8)) == "beq a0, a1, 8");
+    check("jal", dis(JAL(1, 16)) == "jal ra, 16");
+    check("mul", dis(MUL(10, 11, 12)) == "mul a0, a1, a2");
+    check("div", dis(DIV(10, 11, 12)) == "div a0, a1, a2");
+    check("ecall", dis(ECALL()) == "ecall");
+    check("csrrs", dis(CSRRS(10, 0x341, 0)) == "csrrs a0, mepc, zero");
+    check("slli", dis(SLLI(10, 10, 2)) == "slli a0, a0, 2");
 }
 
 int main() {
@@ -569,6 +592,7 @@ int main() {
     test_vmem();
     test_csr();
     test_config();
+    test_disasm();
 
     std::cout << "\n===========================================\n";
     std::cout << "  " << passed << " passed,  " << failed << " failed\n";

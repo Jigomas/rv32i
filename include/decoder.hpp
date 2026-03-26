@@ -82,7 +82,8 @@ DecodedInstr<XLEN> Decoder<XLEN>::decode(Word raw) {
             break;
         case OP_LUI:
         case OP_AUIPC:
-            d.imm = static_cast<typename DecodedInstr<XLEN>::SWord>(decodeImmU(raw));
+            d.imm = static_cast<typename DecodedInstr<XLEN>::SWord>(
+                static_cast<int32_t>(decodeImmU(raw)));
             break;
         case OP_JAL:
             d.imm = decodeImmJ<XLEN>(raw);
