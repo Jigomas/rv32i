@@ -51,7 +51,7 @@ rv32i/
 │   ├── disasm.hpp          # Disasm::disassemble(DecodedInstr) → строка; ABI-имена регистров
 │   ├── register_file.hpp   # RegisterFile<XLEN>: 32 рег, x0=0;
 │   │                       # RegRole (Preserved/NonPreserved/Special), ABI_NAMES[]
-│   ├── memory_model.hpp    # MemoryModel<XLEN>: плоская память, LR/SC reservation
+│   ├── memory_model.hpp    # MemoryModel<XLEN>: плоская память, LR/SC reservation, MMIO regions
 │   ├── alu.hpp             # ALU<XLEN>::execute(Op, a, b): RV32I + M-ext
 │   ├── instr_builder.hpp   # Кодировщики R/I/S/B/U/J + псевдоинструкции + AMO + CSR
 │   ├── csr_file.hpp        # Адреса CSR, CsrFile<XLEN>: read/write/csrrw/csrrs/csrrc
@@ -72,7 +72,7 @@ rv32i/
 │   └── README.md           # оригинальный README
 ├── tests/
 │   └── test.cpp            # Набор тестов (MemoryModel, RegisterFile, ALU, Decoder, RVModel,
-│                           #              Alignment, Sv32 vmem, CSR, Disasm) — 100 тестов
+│                           #              Alignment, Sv32 vmem, CSR, Disasm, MMIO) — 108 тестов
 ├── CMakeLists.txt
 └── README.md
 ```
@@ -93,6 +93,7 @@ rv32i/
 ### Debug (ASan + UBSan + assert)
 
 ```bash
+# Из корня репозитория:
 cmake -B build -DCMAKE_BUILD_TYPE=Debug
 cmake --build build -j$(nproc)
 ```
@@ -100,6 +101,7 @@ cmake --build build -j$(nproc)
 ### Release
 
 ```bash
+# Из корня репозитория:
 cmake -B build-release -DCMAKE_BUILD_TYPE=Release
 cmake --build build-release -j$(nproc)
 ```
@@ -107,13 +109,13 @@ cmake --build build-release -j$(nproc)
 ### Запуск демо
 
 ```bash
-./build/rv32i_cpu
+./build/rv32i/rv32i_cpu
 ```
 
 ### Запуск OS бинарника
 
 ```bash
-./build/rv32i_cpu kernel.bin
+./build/rv32i/rv32i_cpu kernel.bin
 ```
 
 Симулятор загружает flat binary по адресу `0x0`, выделяет 64 KiB памяти, стартует с PC=0.
@@ -122,7 +124,7 @@ ECALL-хендлер: `a7=1` → `putchar(a0)`, `a7=10` → halt.
 ### Запуск тестов
 
 ```bash
-./build/rv32i_tests
+./build/rv32i/rv32i_tests
 ```
 
 ---

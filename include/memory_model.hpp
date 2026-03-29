@@ -1,6 +1,7 @@
 #pragma once
 #include <cassert>
 #include <cstdint>
+#include <functional>
 #include <iomanip>
 #include <iostream>
 #include <stdexcept>
@@ -26,6 +27,15 @@ public:
     MemoryModel(MemoryModel&&) noexcept            = default;
     MemoryModel& operator=(MemoryModel&&) noexcept = default;
 
+    // register an MMIO region [base, base+size); on_read/on_write receive the word-aligned address
+    void mapMmio(Addr                             base,
+                 Addr                             size,
+                 std::function<WordT(Addr)>       on_read,
+                 std::function<void(Addr, WordT)> on_write) {
+        mmio_.push_back(
+            {base, static_cast<Addr>(base + size), std::move(on_read), std::move(on_write)});
+    }
+
     void loadProgram(const std::vector<uint8_t>& program, Addr base = 0) {
         assert(!program.empty() && "loadProgram: program must not be empty");
         if (static_cast<size_t>(base) + program.size() > data_.size()) {
@@ -47,11 +57,21 @@ public:
     }
 
     ByteT readByte(Addr addr) const {
+        if (const MmioRegion* r = findMmio(addr)) {
+            const Addr  waddr = addr & ~Addr(3);
+            const WordT w     = r->on_read(waddr);
+            return static_cast<ByteT>((w >> ((addr & Addr(3)) * 8u)) & 0xFFu);
+        }
         checkBounds(addr, 1);
         return data_[addr];
     }
 
     HalfT readHalf(Addr addr) const {
+        if (const MmioRegion* r = findMmio(addr)) {
+            const Addr  waddr = addr & ~Addr(3);
+            const WordT w     = r->on_read(waddr);
+            return static_cast<HalfT>((w >> ((addr & Addr(2)) * 8u)) & 0xFFFFu);
+        }
         checkBounds(addr, 2);
         return static_cast<HalfT>(static_cast<unsigned>(data_[addr]) |
                                   (static_cast<unsigned>(data_[addr + 1]) << 8));
@@ -59,6 +79,8 @@ public:
 
     // always 32 bits: fetch, LW, SW
     WordT readWord(Addr addr) const {
+        if (const MmioRegion* r = findMmio(addr))
+            return r->on_read(addr);
         checkBounds(addr, 4);
         return static_cast<WordT>(data_[addr]) | (static_cast<WordT>(data_[addr + 1]) << 8) |
                (static_cast<WordT>(data_[addr + 2]) << 16) |
@@ -66,17 +88,37 @@ public:
     }
 
     void write(Addr addr, ByteT val) {
+        if (MmioRegion* r = findMmio(addr)) {
+            const Addr    waddr = addr & ~Addr(3);
+            const uint8_t shift = static_cast<uint8_t>((addr & Addr(3)) * 8u);
+            WordT         w     = r->on_read(waddr);
+            w                   = (w & ~(WordT(0xFFu) << shift)) | (WordT(val) << shift);
+            r->on_write(waddr, w);
+            return;
+        }
         checkBounds(addr, 1);
         data_[addr] = val;
     }
 
     void write(Addr addr, HalfT val) {
+        if (MmioRegion* r = findMmio(addr)) {
+            const Addr    waddr = addr & ~Addr(3);
+            const uint8_t shift = static_cast<uint8_t>((addr & Addr(2)) * 8u);
+            WordT         w     = r->on_read(waddr);
+            w                   = (w & ~(WordT(0xFFFFu) << shift)) | (WordT(val) << shift);
+            r->on_write(waddr, w);
+            return;
+        }
         checkBounds(addr, 2);
         data_[addr]     = static_cast<uint8_t>(val & 0xFFu);
         data_[addr + 1] = static_cast<uint8_t>((val >> 8) & 0xFFu);
     }
 
     void write(Addr addr, WordT val) {
+        if (MmioRegion* r = findMmio(addr)) {
+            r->on_write(addr, val);
+            return;
+        }
         checkBounds(addr, 4);
         data_[addr]     = static_cast<uint8_t>(val & 0xFFu);
         data_[addr + 1] = static_cast<uint8_t>((val >> 8) & 0xFFu);
@@ -117,9 +159,31 @@ public:
     void invalidateReservation() { lr_valid_ = false; }
 
 private:
-    std::vector<uint8_t> data_;
-    Addr                 lr_addr_  = Addr(0);
-    bool                 lr_valid_ = false;
+    struct MmioRegion {
+        Addr                             base;
+        Addr                             end;  // exclusive
+        std::function<WordT(Addr)>       on_read;
+        std::function<void(Addr, WordT)> on_write;
+    };
+
+    std::vector<uint8_t>    data_;
+    std::vector<MmioRegion> mmio_;
+    Addr                    lr_addr_  = Addr(0);
+    bool                    lr_valid_ = false;
+
+    const MmioRegion* findMmio(Addr addr) const {
+        for (const auto& r : mmio_)
+            if (addr >= r.base && addr < r.end)
+                return &r;
+        return nullptr;
+    }
+
+    MmioRegion* findMmio(Addr addr) {
+        for (auto& r : mmio_)
+            if (addr >= r.base && addr < r.end)
+                return &r;
+        return nullptr;
+    }
 
     void checkBounds(Addr addr, size_t width) const {
         assert((width == 1 || width == 2 || width == 4) && "checkBounds: width must be 1, 2, or 4");

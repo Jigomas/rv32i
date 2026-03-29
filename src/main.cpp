@@ -58,14 +58,20 @@ static void run_os(const char* bin_path) {
     MemoryModel<32>       mem(MEM_SIZE);
     f.read(reinterpret_cast<char*>(mem.data()), size);
 
+    // UART: TX register at 0xF000 — write byte → stdout
+    mem.mapMmio(
+        0xF000u,
+        4u,
+        [](uint32_t) { return 0u; },
+        [](uint32_t, uint32_t val) { std::cout << static_cast<char>(val & 0xFFu); });
+
     CacheModel<32>              cache(mem, 64);
     Config                      cfg;
     RVModel<32, CacheModel<32>> cpu(cfg, cache);
     cpu.setEcallHandler([](RVModel<32, CacheModel<32>>& c) {
         const uint32_t a7 = c.regs().get(17);
-        const uint32_t a0 = c.regs().get(10);
         if (a7 == 1u)
-            std::cout << static_cast<char>(a0);
+            std::cout << static_cast<char>(c.regs().get(10));
         else if (a7 == 10u)
             c.halt();
     });

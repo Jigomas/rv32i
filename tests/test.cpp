@@ -578,6 +578,52 @@ void test_disasm() {
     check("slli", dis(SLLI(10, 10, 2)) == "slli a0, a0, 2");
 }
 
+void test_mmio() {
+    std::cout << "\n[ MMIO ]\n";
+
+    MemoryModel<> mem(4096);
+
+    // word register: writable, readable
+    uint32_t mmio_reg = 0;
+    mem.mapMmio(
+        0x1000,
+        4,
+        [&](uint32_t) { return mmio_reg; },
+        [&](uint32_t, uint32_t val) { mmio_reg = val; });
+
+    mem.write(uint32_t(0x1000), uint32_t(0xDEADBEEFu));
+    check("mmio word write", mmio_reg == 0xDEADBEEFu);
+    check("mmio word read", mem.readWord(0x1000u) == 0xDEADBEEFu);
+
+    // byte write into mmio (read-modify-write on word register)
+    mmio_reg = 0x12345678u;
+    mem.write(uint32_t(0x1000), uint8_t(0xAAu));  // overwrite byte 0
+    check("mmio byte write", mmio_reg == 0x123456AAu);
+    check("mmio byte read", mem.readByte(0x1001u) == 0x56u);
+
+    // half write
+    mmio_reg = 0x12345678u;
+    mem.write(uint32_t(0x1000), uint16_t(0xBBCCu));
+    check("mmio half write", mmio_reg == 0x1234BBCCu);
+    check("mmio half read", mem.readHalf(0x1002u) == 0x1234u);
+
+    // ram below/above mmio is unaffected
+    mem.write(uint32_t(0x0FF0), uint32_t(0x42u));
+    check("ram below mmio intact", mem.readWord(0x0FF0u) == 0x42u);
+
+    // ecall-style mmio: capture written chars
+    std::string output;
+    mem.mapMmio(
+        0x2000,
+        4,
+        [](uint32_t) { return 0u; },
+        [&](uint32_t, uint32_t val) { output += static_cast<char>(val & 0xFFu); });
+
+    mem.write(uint32_t(0x2000), uint32_t('H'));
+    mem.write(uint32_t(0x2000), uint32_t('i'));
+    check("mmio uart sim", output == "Hi");
+}
+
 int main() {
     std::cout << "===========================================\n";
     std::cout << "           RV32I CPU — Test Suite          \n";
@@ -593,6 +639,7 @@ int main() {
     test_csr();
     test_config();
     test_disasm();
+    test_mmio();
 
     std::cout << "\n===========================================\n";
     std::cout << "  " << passed << " passed,  " << failed << " failed\n";
