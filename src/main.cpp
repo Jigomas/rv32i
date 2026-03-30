@@ -66,7 +66,7 @@ static void run_os(const char* bin_path) {
         [](uint32_t, uint32_t val) { std::cout << static_cast<char>(val & 0xFFu); });
 
     CacheModel<32>              cache(mem, 64);
-    Config                      cfg;
+    Config                      cfg(Config::EXT_A);
     RVModel<32, CacheModel<32>> cpu(cfg, cache);
     cpu.setEcallHandler([](RVModel<32, CacheModel<32>>& c) {
         const uint32_t a7 = c.regs().get(17);
