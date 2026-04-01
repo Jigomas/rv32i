@@ -5,7 +5,7 @@
 ![C++17](https://img.shields.io/badge/C%2B%2B-17-blue)
 ![RISC-V](https://img.shields.io/badge/arch-RISC--V%20RV32IA-green)
 ![CMake](https://img.shields.io/badge/build-CMake-informational)
-![tests](https://img.shields.io/badge/tests-108%20passing-brightgreen)
+
 
 ---
 
