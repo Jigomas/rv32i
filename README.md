@@ -6,7 +6,6 @@
 ![RISC-V](https://img.shields.io/badge/arch-RISC--V%20RV32IA-green)
 ![CMake](https://img.shields.io/badge/build-CMake-informational)
 
-
 ---
 
 ## О проекте
