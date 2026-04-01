@@ -2,6 +2,11 @@
 
 Программная модель процессора RISC-V на C++17.
 
+![C++17](https://img.shields.io/badge/C%2B%2B-17-blue)
+![RISC-V](https://img.shields.io/badge/arch-RISC--V%20RV32IA-green)
+![CMake](https://img.shields.io/badge/build-CMake-informational)
+![tests](https://img.shields.io/badge/tests-108%20passing-brightgreen)
+
 ---
 
 ## О проекте
@@ -16,7 +21,7 @@ single-cycle: один вызов `step()` — один цикл fetch → decod
 
 ### Архитектурные решения
 
-**Single-cycle, Von Neumann.** Один `step()` — один fetch/decode/execute без кэша и конвейера.
+**Single-cycle, Von Neumann.** Один `step()` — один fetch/decode/execute без конвейера.
 Единая память для кода и данных. Состояние процессора полностью определяется PC
 и регистровым файлом — удобно для пошаговой отладки ОС.
 
@@ -24,10 +29,10 @@ single-cycle: один вызов `step()` — один цикл fetch → decod
 Каждый компонент (ALU, Decoder, MemoryModel и др.) инстанциирован явно в отдельном `.cpp` —
 компиляция происходит один раз, без дублирования кода.
 
-**ECALL через callback.** Симулятор не знает ничего про OS — при встрече инструкции `ecall`
-вызывается зарегистрированный хендлер. В `run_os()` хендлер реализован как syscall table:
-массив `std::function<void(Cpu&)>` с индексом по `a7`, что позволяет добавлять новые
-системные вызовы одной строкой. Текущие: `a7=1` → `putchar(a0)`, `a7=10` → halt.
+**ECALL через syscall table.** Симулятор не знает ничего про OS — при встрече инструкции `ecall`
+вызывается зарегистрированный хендлер. В `run_os()` хендлер реализован как массив
+`std::function<void(Cpu&)>` с индексом по `a7`: добавить новый системный вызов — одна строка.
+Текущие: `a7=1` → `putchar(a0)`, `a7=10` → halt.
 
 **CacheModel как сменный слой памяти.** `RVModel` принимает тип памяти как шаблонный параметр
 (`RVModel<XLEN, MemT>`), что позволяет подставить `CacheModel<32>` вместо `MemoryModel<32>`
@@ -36,6 +41,28 @@ single-cycle: один вызов `step()` — один цикл fetch → decod
 в `MemoryModel`. Размер кэша — 64 слова (256 байт). После исполнения симулятор печатает
 статистику: количество попаданий, промахов и hit rate. При прогоне ядра XorOS получается
 около 96% попаданий.
+
+```plaintext
+┌─────────────────────────────────────────────────────────┐
+│                    RVModel<XLEN, MemT>                   │
+│                                                         │
+│  PC · RegisterFile · CsrFile                            │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐              │
+│  │  Decoder │  │   ALU    │  │  CsrFile │              │
+│  └──────────┘  └──────────┘  └──────────┘              │
+│                                                         │
+│  fetch / load / store  ──►  MemT (шаблонный параметр)   │
+└────────────────────────────────┬────────────────────────┘
+                                 │
+              ┌──────────────────┼──────────────────┐
+              │                                     │
+    ┌─────────▼──────────┐             ┌────────────▼────────────┐
+    │  MemoryModel<XLEN> │             │    CacheModel<XLEN>     │
+    │  плоская память    │             │  LRU · write-through    │
+    │  LR/SC reservation │             │  read-allocate · 64 слов│
+    │  MMIO regions      │◄────miss────┤  hits / misses stats    │
+    └────────────────────┘             └─────────────────────────┘
+```
 
 ---
 
@@ -116,7 +143,7 @@ cmake --build build-release -j$(nproc)
 ### Запуск OS бинарника
 
 ```bash
-./build/rv32i/rv32i_cpu kernel.bin
+./build/rv32i/rv32i_cpu os/build/xoros.bin
 ```
 
 Симулятор загружает flat binary по адресу `0x0`, выделяет 64 KiB памяти, стартует с PC=0.
