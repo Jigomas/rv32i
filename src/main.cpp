@@ -68,12 +68,24 @@ static void run_os(const char* bin_path) {
     CacheModel<32>              cache(mem, 64);
     Config                      cfg(Config::EXT_A);
     RVModel<32, CacheModel<32>> cpu(cfg, cache);
-    cpu.setEcallHandler([](RVModel<32, CacheModel<32>>& c) {
+    using Cpu                                              = RVModel<32, CacheModel<32>>;
+    static const std::function<void(Cpu&)> syscall_table[] = {
+        nullptr,                                                           // 0: unused
+        [](Cpu& c) { std::cout << static_cast<char>(c.regs().get(10)); },  // 1: putchar
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,                   // 2-9: unused
+        [](Cpu& c) { c.halt(); },  // 10: exit
+    };
+    cpu.setEcallHandler([](Cpu& c) {
         const uint32_t a7 = c.regs().get(17);
-        if (a7 == 1u)
-            std::cout << static_cast<char>(c.regs().get(10));
-        else if (a7 == 10u)
-            c.halt();
+        if (a7 < std::size(syscall_table) && syscall_table[a7])
+            syscall_table[a7](c);
     });
     cpu.init(0x0u, static_cast<uint32_t>(MEM_SIZE) - 4u);
     cpu.run();
