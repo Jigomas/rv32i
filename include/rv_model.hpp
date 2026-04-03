@@ -1,7 +1,6 @@
 #pragma once
 #include <cassert>
 #include <cstdint>
-#include <functional>
 #include <iomanip>
 #include <iostream>
 #include <optional>
@@ -52,7 +51,7 @@ public:
     using SWord = typename XlenTraits<XLEN>::SWord;
     using Addr  = typename XlenTraits<XLEN>::Addr;
 
-    using EcallHandler = std::function<void(RVModel<XLEN, MemT>&)>;
+    enum class PrivMode : uint32_t { U = 0, S = 1, M = 3 };
 
     RVModel(Config cfg, MemT& mem)
         : pc_(UWord(0)),
@@ -60,9 +59,10 @@ public:
           mem_(mem),
           halted_(false),
           instrCount_(0),
-          debugMode_(false) {}
+          debugMode_(false),
+          priv_mode_(PrivMode::M) {}
 
-    void setEcallHandler(EcallHandler h) { ecallHandler_ = std::move(h); }
+    PrivMode privMode() const { return priv_mode_; }
 
     ~RVModel()                         = default;
     RVModel(const RVModel&)            = delete;
@@ -88,6 +88,7 @@ public:
         pc_         = startPC;
         halted_     = false;
         instrCount_ = 0;
+        priv_mode_  = PrivMode::M;
         if (stackPointer != UWord(0))
             regs_.set(2, stackPointer);  // x2 = sp
     }
@@ -224,7 +225,7 @@ private:
     bool               halted_;
     uint64_t           instrCount_;
     bool               debugMode_;
-    EcallHandler       ecallHandler_;
+    PrivMode           priv_mode_;
 
     void advancePC() { pc_ += UWord(4); }
 
@@ -274,6 +275,11 @@ private:
                     fireTrap(cause, UWord(va));
                     return std::nullopt;
                 }
+                // U-mode can only access pages with PTE.U=1 (bit 4)
+                if (priv_mode_ == PrivMode::U && !(pte & (1u << 4u))) {
+                    fireTrap(cause, UWord(va));
+                    return std::nullopt;
+                }
                 // superpage: pa = pte.ppn[1]:va.vpn[0]:offset
                 // regular:   pa = pte.ppn:offset
                 const UWord pa = (lvl == 1)
@@ -306,19 +312,22 @@ private:
         mstatus &= ~UWord(CSR::MSTATUS_MIE | CSR::MSTATUS_MPIE | CSR::MSTATUS_MPP);
         if (mie)
             mstatus |= UWord(CSR::MSTATUS_MPIE);
-        mstatus |= UWord(CSR::MSTATUS_MPP);  // MPP = 11 (M-mode)
+        mstatus |= static_cast<UWord>(priv_mode_) << 11u;  // MPP = current privilege mode
         csr_.write(CSR::MSTATUS, mstatus);
-        pc_ = mtvec & ~UWord(3);  // direct mode: BASE & ~3
+        priv_mode_ = PrivMode::M;
+        pc_        = mtvec & ~UWord(3);  // direct mode: BASE & ~3
     }
 
     bool executeMRET() {
-        // MIE = MPIE, MPIE = 1, pc = mepc
-        UWord mstatus = csr_.read(CSR::MSTATUS);
-        bool  mpie    = (mstatus & UWord(CSR::MSTATUS_MPIE)) != UWord(0);
-        mstatus &= ~UWord(CSR::MSTATUS_MIE | CSR::MSTATUS_MPIE);
+        // restore privilege from MPP, MIE = MPIE, MPIE = 1, MPP = U, pc = mepc
+        UWord          mstatus = csr_.read(CSR::MSTATUS);
+        bool           mpie    = (mstatus & UWord(CSR::MSTATUS_MPIE)) != UWord(0);
+        const uint32_t mpp     = (static_cast<uint32_t>(mstatus) >> 11u) & 0x3u;
+        priv_mode_             = static_cast<PrivMode>(mpp);
+        mstatus &= ~UWord(CSR::MSTATUS_MIE | CSR::MSTATUS_MPIE | CSR::MSTATUS_MPP);
         if (mpie)
             mstatus |= UWord(CSR::MSTATUS_MIE);
-        mstatus |= UWord(CSR::MSTATUS_MPIE);
+        mstatus |= UWord(CSR::MSTATUS_MPIE);  // MPP already cleared to U (0)
         csr_.write(CSR::MSTATUS, mstatus);
         pc_ = csr_.getMEPC();
         return true;
@@ -379,12 +388,14 @@ private:
 
             case OP_SYSTEM:
                 if (d.funct3 == 0u) {
-                    // ECALL: funct3=0, imm=0
+                    // ECALL: funct3=0, imm=0 - route through fireTrap based on privilege mode
                     if (d.imm == 0) {
-                        if (ecallHandler_)
-                            ecallHandler_(*this);
-                        else
-                            halted_ = true;
+                        const UWord cause =
+                            (priv_mode_ == PrivMode::U) ? UWord(CSR::EXC_ECALL_U)
+                            : (priv_mode_ == PrivMode::S) ? UWord(CSR::EXC_ECALL_S)
+                                                          : UWord(CSR::EXC_ECALL_M);
+                        fireTrap(cause);
+                        return true;
                     } else if (d.imm == 0x302) {
                         // MRET: pc = mepc, restore mstatus.MIE from MPIE
                         return executeMRET();
@@ -595,9 +606,14 @@ private:
     bool executeCSR(const DecodedInstr<XLEN>& d) {
         using namespace ISA;
         const uint16_t addr = static_cast<uint16_t>(d.imm & 0xFFF);
-        const UWord    rs1v = regs_.get(d.rs1);
-        const uint8_t  zimm = static_cast<uint8_t>(d.rs1);
-        UWord          old  = UWord(0);
+        // CSR addr[9:8] = minimum required privilege (0=U, 1=S, 3=M)
+        if (static_cast<uint32_t>(priv_mode_) < ((addr >> 8u) & 0x3u)) {
+            fireTrap(UWord(CSR::EXC_ILLEGAL_INSN), UWord(addr));
+            return true;
+        }
+        const UWord   rs1v = regs_.get(d.rs1);
+        const uint8_t zimm = static_cast<uint8_t>(d.rs1);
+        UWord         old  = UWord(0);
 
         switch (d.funct3) {
             case F3_CSRRW:

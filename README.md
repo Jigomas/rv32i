@@ -13,10 +13,11 @@
 Симулятор реализован как шаблонная библиотека, параметризованная по разрядности (`XLEN=32/64`),
 с явными инстанциациями в отдельных `.cpp`-файлах. Поддерживает базовую архитектуру RV32I
 с расширениями целочисленного умножения (M) и атомарных операций (A). Архитектура Von Neumann,
-single-cycle: один вызов `step()` — один цикл fetch → decode → execute. Для взаимодействия
-с хостом симулятор перехватывает инструкцию `ecall` через C++ callback (`setEcallHandler`).
-Между процессором и памятью можно вставить `CacheModel` — LRU-кэш, который собирает
-статистику попаданий и промахов в реальном времени.
+single-cycle: один вызов `step()` — один цикл fetch → decode → execute. Симулятор отслеживает
+текущий уровень привилегий (`PrivMode`: M/S/U) и маршрутизирует исключения через `fireTrap` —
+включая `ecall`, который кидает `EXC_ECALL_U/S/M` в зависимости от режима. Между процессором
+и памятью можно вставить `CacheModel` — LRU-кэш, который собирает статистику попаданий
+и промахов в реальном времени.
 
 ### Архитектурные решения
 
@@ -28,10 +29,13 @@ single-cycle: один вызов `step()` — один цикл fetch → decod
 Каждый компонент (ALU, Decoder, MemoryModel и др.) инстанциирован явно в отдельном `.cpp` —
 компиляция происходит один раз, без дублирования кода.
 
-**ECALL через syscall table.** Симулятор не знает ничего про OS — при встрече инструкции `ecall`
-вызывается зарегистрированный хендлер. В `run_os()` хендлер реализован как массив
-`std::function<void(Cpu&)>` с индексом по `a7`: добавить новый системный вызов — одна строка.
-Текущие: `a7=1` → `putchar(a0)`, `a7=10` → halt.
+**Privilege tracking + ECALL через fireTrap.** Симулятор хранит текущий уровень привилегий
+в поле `priv_mode_` (`PrivMode::M/S/U`). Инструкция `mret` восстанавливает режим из `mstatus.MPP`,
+`fireTrap` сохраняет его туда же. При встрече `ecall` симулятор не вызывает никакой C++
+функции — он вызывает `fireTrap(EXC_ECALL_U/S/M)`, устанавливает `mepc` и передаёт управление
+на `mtvec`. Обработка системных вызовов полностью на стороне ОС. CSR-инструкции проверяют
+право доступа: биты [9:8] адреса CSR кодируют минимальный уровень привилегий; обращение
+из недостаточного режима → `fireTrap(EXC_ILLEGAL_INSN)`.
 
 **CacheModel как сменный слой памяти.** `RVModel` принимает тип памяти как шаблонный параметр
 (`RVModel<XLEN, MemT>`), что позволяет подставить `CacheModel<32>` вместо `MemoryModel<32>`
@@ -39,28 +43,28 @@ single-cycle: один вызов `step()` — один цикл fetch → decod
 и read-allocate: промах при чтении загружает слово в кэш, запись всегда проходит насквозь
 в `MemoryModel`. Размер кэша — 64 слова (256 байт). После исполнения симулятор печатает
 статистику: количество попаданий, промахов и hit rate. При прогоне ядра XorOS получается
-около 96% попаданий.
+около 81% попаданий.
 
 ```plaintext
 ┌─────────────────────────────────────────────────────────┐
 │                    RVModel<XLEN, MemT>                   │
 │                                                         │
-│  PC · RegisterFile · CsrFile                            │
+│  PC · RegisterFile · CsrFile · PrivMode (M/S/U)         │
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐              │
 │  │  Decoder │  │   ALU    │  │  CsrFile │              │
 │  └──────────┘  └──────────┘  └──────────┘              │
 │                                                         │
 │  fetch / load / store  ──►  MemT (шаблонный параметр)   │
-└────────────────────────────────┬────────────────────────┘
-                                 │
-              ┌──────────────────┼──────────────────┐
-              │                                     │
-    ┌─────────▼──────────┐             ┌────────────▼────────────┐
-    │  MemoryModel<XLEN> │             │    CacheModel<XLEN>     │
-    │  плоская память    │             │  LRU · write-through    │
-    │  LR/SC reservation │             │  read-allocate · 64 слов│
-    │  MMIO regions      │◄────miss────┤  hits / misses stats    │
-    └────────────────────┘             └─────────────────────────┘
+└────────────────────────────┬────────────────────────────┘
+                             │
+          ┌──────────────────┼──────────────────┐
+          │                                     │
+┌─────────▼──────────┐             ┌────────────▼────────────┐
+│  MemoryModel<XLEN> │             │    CacheModel<XLEN>     │
+│  плоская память    │             │  LRU · write-through    │
+│  LR/SC reservation │             │  read-allocate · 64 слов│
+│  MMIO regions      │◄────miss────┤  hits / misses stats    │
+└────────────────────┘             └─────────────────────────┘
 ```
 
 ---
@@ -82,7 +86,7 @@ rv32i/
 │   ├── alu.hpp             # ALU<XLEN>::execute(Op, a, b): RV32I + M-ext
 │   ├── instr_builder.hpp   # Кодировщики R/I/S/B/U/J + псевдоинструкции + AMO + CSR
 │   ├── csr_file.hpp        # Адреса CSR, CsrFile<XLEN>: read/write/csrrw/csrrs/csrrc
-│   └── rv_model.hpp        # RVModel<XLEN>: PC, step/run/halt, ECALL, CSR, Context/FullContext
+│   └── rv_model.hpp        # RVModel<XLEN>: PC, PrivMode, step/run/halt, fireTrap, Context/FullContext
 ├── src/
 │   ├── main.cpp            # Демо (3+4)*5=35; run_os(path) — загружает OS бинарник
 │   └── *.cpp               # Явные инстанциации шаблонов для XLEN=32 и XLEN=64
@@ -146,7 +150,7 @@ cmake --build build-release -j$(nproc)
 ```
 
 Симулятор загружает flat binary по адресу `0x0`, выделяет 64 KiB памяти, стартует с PC=0.
-ECALL-хендлер: `a7=1` → `putchar(a0)`, `a7=10` → halt.
+Системные вызовы (`ecall`) маршрутизируются через `fireTrap` — обрабатываются ОС.
 
 ### Запуск тестов
 
@@ -183,11 +187,13 @@ ECALL-хендлер: `a7=1` → `putchar(a0)`, `a7=10` → halt.
 | Нелегальный опкод (mtvec=0)            | `std::runtime_error`               |
 | Нелегальный опкод (mtvec≠0)            | `fireTrap(EXC_ILLEGAL_INSN)`       |
 | M/A-инструкция при выключенном EXT_M/A | `fireTrap(EXC_ILLEGAL_INSN)`       |
+| CSR-доступ ниже требуемого привилегия  | `fireTrap(EXC_ILLEGAL_INSN)`       |
 | LW/SW/AMO невыровненный адрес          | `fireTrap(EXC_LOAD/STORE_MISALIGN)`|
 | LH/SH нечётный адрес                   | `fireTrap(EXC_LOAD/STORE_MISALIGN)`|
 | JAL/JALR/BRANCH невыровненный target   | `fireTrap(EXC_INSN_MISALIGN)`      |
 | Обращение вне памяти (fetch/load/store)| `fireTrap(EXC_*_FAULT)`            |
 | Sv32 страница не отображена            | `fireTrap(EXC_*_PAGE_FAULT)`       |
+| U-mode обращение к странице без PTE.U  | `fireTrap(EXC_*_PAGE_FAULT)`       |
 | Неизвестная операция в ALU             | `std::invalid_argument`            |
 
 В Debug-сборке дополнительно срабатывают `assert` на:

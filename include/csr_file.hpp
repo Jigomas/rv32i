@@ -49,6 +49,7 @@ constexpr uint32_t EXC_LOAD_FAULT       = 0b0101u;  // load access fault
 constexpr uint32_t EXC_STORE_MISALIGN   = 0b0110u;  // store address misaligned
 constexpr uint32_t EXC_STORE_FAULT      = 0b0111u;  // store access fault
 constexpr uint32_t EXC_ECALL_U          = 0b1000u;  // ecall from U-mode
+constexpr uint32_t EXC_ECALL_S          = 0b1001u;  // ecall from S-mode
 constexpr uint32_t EXC_ECALL_M          = 0b1011u;  // ecall from M-mode
 constexpr uint32_t EXC_INSN_PAGE_FAULT  = 0b1100u;  // instruction page fault
 constexpr uint32_t EXC_LOAD_PAGE_FAULT  = 0b1101u;  // load page fault
