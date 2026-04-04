@@ -73,8 +73,8 @@ static void test_refill_after_eviction() {
 
 static void test_hit_sequence() {
     LfuCache<int, int> c(3);
-    int hits = 0;
-    int seq[] = {1, 2, 3, 1, 2, 1, 2, 3, 4, 3};
+    int                hits  = 0;
+    int                seq[] = {1, 2, 3, 1, 2, 1, 2, 3, 4, 3};
     for (int x : seq) {
         if (c.Get(x) != nullptr)
             ++hits;

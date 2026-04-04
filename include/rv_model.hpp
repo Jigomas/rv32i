@@ -156,8 +156,22 @@ public:
     CsrFile<XLEN>&      csr() { return csr_; }
     bool                isHalted() const { return halted_; }
     void                halt() { halted_ = true; }
-    uint64_t            instrCount() const { return instrCount_; }
-    void                setDebug(bool on) { debugMode_ = on; }
+
+    // fire interrupt if mstatus.MIE=1 and MIE register bit is set
+    bool triggerInterrupt(UWord cause) {
+        if (halted_)
+            return false;
+        const UWord mstatus = csr_.read(CSR::MSTATUS);
+        if (!(mstatus & UWord(CSR::MSTATUS_MIE)))
+            return false;
+        const UWord code = cause & ~UWord(CSR::MCAUSE_INTERRUPT);
+        if (!(csr_.read(CSR::MIE) & (UWord(1) << code)))
+            return false;
+        fireTrap(cause);
+        return true;
+    }
+    uint64_t instrCount() const { return instrCount_; }
+    void     setDebug(bool on) { debugMode_ = on; }
 
     // save/restore callee-saved registers + sp + ra + pc
     Context<XLEN> saveContext() const {
@@ -390,10 +404,9 @@ private:
                 if (d.funct3 == 0u) {
                     // ECALL: funct3=0, imm=0 - route through fireTrap based on privilege mode
                     if (d.imm == 0) {
-                        const UWord cause =
-                            (priv_mode_ == PrivMode::U) ? UWord(CSR::EXC_ECALL_U)
-                            : (priv_mode_ == PrivMode::S) ? UWord(CSR::EXC_ECALL_S)
-                                                          : UWord(CSR::EXC_ECALL_M);
+                        const UWord cause = (priv_mode_ == PrivMode::U)   ? UWord(CSR::EXC_ECALL_U)
+                                            : (priv_mode_ == PrivMode::S) ? UWord(CSR::EXC_ECALL_S)
+                                                                          : UWord(CSR::EXC_ECALL_M);
                         fireTrap(cause);
                         return true;
                     } else if (d.imm == 0x302) {

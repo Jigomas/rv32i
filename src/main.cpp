@@ -65,11 +65,45 @@ static void run_os(const char* bin_path) {
         [](uint32_t) { return 0u; },
         [](uint32_t, uint32_t val) { std::cout << static_cast<char>(val & 0xFFu); });
 
+    // CLINT: mtime at 0xF004 (lo/hi), mtimecmp at 0xF00C (lo/hi)
+    // placed just above UART (0xF000) in the identity-mapped region
+    uint64_t mtime    = 0;
+    uint64_t mtimecmp = UINT64_MAX;  // disabled until OS writes it
+
+    mem.mapMmio(
+        0xF004u,
+        8u,
+        [&](uint32_t addr) -> uint32_t {
+            return addr == 0xF004u ? static_cast<uint32_t>(mtime)
+                                   : static_cast<uint32_t>(mtime >> 32);
+        },
+        [](uint32_t, uint32_t) {});  // mtime is read-only from software
+
+    mem.mapMmio(
+        0xF00Cu,
+        8u,
+        [&](uint32_t addr) -> uint32_t {
+            return addr == 0xF00Cu ? static_cast<uint32_t>(mtimecmp)
+                                   : static_cast<uint32_t>(mtimecmp >> 32);
+        },
+        [&](uint32_t addr, uint32_t val) {
+            if (addr == 0xF00Cu)
+                mtimecmp = (mtimecmp & 0xFFFFFFFF00000000ull) | val;
+            else
+                mtimecmp = (static_cast<uint64_t>(val) << 32) | (mtimecmp & 0xFFFFFFFFull);
+        });
+
     CacheModel<32>              cache(mem, 64);
     Config                      cfg(Config::EXT_A);
     RVModel<32, CacheModel<32>> cpu(cfg, cache);
     cpu.init(0x0u, static_cast<uint32_t>(MEM_SIZE) - 4u);
-    cpu.run();
+
+    while (!cpu.isHalted()) {
+        cpu.step();
+        ++mtime;
+        if (mtime >= mtimecmp)
+            cpu.triggerInterrupt(CSR::INT_TIMER_M);
+    }
 
     std::cout << "\ncache: " << cache.hits() << " hits / " << cache.misses() << " misses" << " | "
               << std::fixed << std::setprecision(1) << cache.hitRate() * 100.0 << "% hit rate\n";
