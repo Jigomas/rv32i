@@ -1,9 +1,12 @@
 #include <cassert>
+#include <cstring>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <string>
 
 #include "../include/config.hpp"
+#include "../include/dumper.hpp"
 #include "../include/instr_builder.hpp"
 #include "../include/memory_model.hpp"
 #include "../include/rv_model.hpp"
@@ -44,7 +47,7 @@ static void demo_arithmetic() {
     assert(result == 35u);
 }
 
-static void run_os(const char* bin_path) {
+static void run_os(const char* bin_path, bool debug, const std::string& trace_path) {
     std::cout << "=== XorOS ===\n";
 
     std::ifstream f(bin_path, std::ios::binary | std::ios::ate);
@@ -98,6 +101,14 @@ static void run_os(const char* bin_path) {
     RVModel<32, CacheModel<32>> cpu(cfg, cache);
     cpu.init(0x0u, static_cast<uint32_t>(MEM_SIZE) - 4u);
 
+    Dumper<32> dbg(trace_path);
+    cpu.setDebug(debug);
+    cpu.setStepHook([&](uint32_t pc, const std::string& dis) { dbg.onStep(pc, dis); });
+    cpu.setTrapHook([&](uint32_t cause, uint32_t mepc, uint32_t tval) {
+        dbg.onTrap(cause, mepc, tval, mtime);
+        dbg.onTrapEtl(cause, mepc, tval, mtime);
+    });
+
     while (!cpu.isHalted()) {
         cpu.step();
         ++mtime;
@@ -105,14 +116,31 @@ static void run_os(const char* bin_path) {
             cpu.triggerInterrupt(CSR::INT_TIMER_M);
     }
 
+    if (debug) {
+        dbg.dumpState(cpu.regs(), cpu.csr(), cpu.getPC());
+        dbg.dumpClint(mtime, mtimecmp);
+        dbg.dumpMemHex(mem, 0x0000u, 0x200u);   // boot / text
+        dbg.dumpMemHex(mem, 0x3000u, 0x1000u);  // BSS: procs, page tables
+    }
+
     std::cout << "\ncache: " << cache.hits() << " hits / " << cache.misses() << " misses" << " | "
               << std::fixed << std::setprecision(1) << cache.hitRate() * 100.0 << "% hit rate\n";
 }
 
+// usage: rv32i_cpu <bin> [--debug] [--trace <file.txt>]
 int main(int argc, char* argv[]) {
-    if (argc == 2) {
+    if (argc >= 2 && argv[1][0] != '-') {
+        bool        debug    = false;
+        std::string trace_path;
+        for (int i = 2; i < argc; ++i) {
+            if (std::strcmp(argv[i], "--debug") == 0) {
+                debug = true;
+            } else if (std::strcmp(argv[i], "--trace") == 0 && i + 1 < argc) {
+                trace_path = argv[++i];
+            }
+        }
         try {
-            run_os(argv[1]);
+            run_os(argv[1], debug, trace_path);
         } catch (const std::exception& e) {
             std::cerr << "ERROR: " << e.what() << "\n";
             return 1;

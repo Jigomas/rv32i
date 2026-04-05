@@ -43,16 +43,16 @@ single-cycle: один вызов `step()` — один цикл fetch → decod
 и read-allocate: промах при чтении загружает слово в кэш, запись всегда проходит насквозь
 в `MemoryModel`. Размер кэша — 64 слова (256 байт). После исполнения симулятор печатает
 статистику: количество попаданий, промахов и hit rate. При прогоне ядра XorOS получается
-около 81% попаданий.
+около 79% попаданий.
 
 ```plaintext
 ┌─────────────────────────────────────────────────────────┐
-│                    RVModel<XLEN, MemT>                   │
+│                    RVModel<XLEN, MemT>                  │
 │                                                         │
 │  PC · RegisterFile · CsrFile · PrivMode (M/S/U)         │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐              │
-│  │  Decoder │  │   ALU    │  │  CsrFile │              │
-│  └──────────┘  └──────────┘  └──────────┘              │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐               │
+│  │  Decoder │  │   ALU    │  │  CsrFile │               │
+│  └──────────┘  └──────────┘  └──────────┘               │
 │                                                         │
 │  fetch / load / store  ──►  MemT (шаблонный параметр)   │
 └────────────────────────────┬────────────────────────────┘
@@ -86,7 +86,9 @@ rv32i/
 │   ├── alu.hpp             # ALU<XLEN>::execute(Op, a, b): RV32I + M-ext
 │   ├── instr_builder.hpp   # Кодировщики R/I/S/B/U/J + псевдоинструкции + AMO + CSR
 │   ├── csr_file.hpp        # Адреса CSR, CsrFile<XLEN>: read/write/csrrw/csrrs/csrrc
-│   └── rv_model.hpp        # RVModel<XLEN>: PC, PrivMode, step/run/halt, fireTrap, Context/FullContext
+│   ├── rv_model.hpp        # RVModel<XLEN>: PC, PrivMode, step/run/halt, fireTrap, Context/FullContext
+│   │                       # setStepHook / setTrapHook — колбеки для Dumper
+│   └── dumper.hpp          # Dumper<XLEN>: трейс инструкций/трапов в .txt; dumpState/dumpMemHex
 ├── src/
 │   ├── main.cpp            # Демо (3+4)*5=35; run_os(path) — загружает OS бинарник
 │   └── *.cpp               # Явные инстанциации шаблонов для XLEN=32 и XLEN=64
@@ -146,11 +148,27 @@ cmake --build build-release -j$(nproc)
 ### Запуск OS бинарника
 
 ```bash
+# обычный запуск
 ./build/rv32i/rv32i_cpu os/build/xoros.bin
+
+# с дампом регистров/CSR/памяти в stderr по завершении
+./build/rv32i/rv32i_cpu os/build/xoros.bin --debug
+
+# запись трейса инструкций + трапов в файл (plain text)
+./build/rv32i/rv32i_cpu os/build/xoros.bin --trace trace.txt
+
+# оба режима одновременно
+./build/rv32i/rv32i_cpu os/build/xoros.bin --debug --trace trace.txt
 ```
 
 Симулятор загружает flat binary по адресу `0x0`, выделяет 64 KiB памяти, стартует с PC=0.
 Системные вызовы (`ecall`) маршрутизируются через `fireTrap` — обрабатываются ОС.
+
+`--debug` по завершении выводит в stderr: все 32 регистра, ключевые CSR (mcause с именем),
+состояние CLINT (`mtime` / `mtimecmp`), hex+ASCII дамп первых 512 байт текста и BSS (0x3000-0x4000).
+
+`--trace` пишет в файл построчно: `[00000000] addi sp, sp, -16` для каждой инструкции
+и `!TRAP cause=0x80000007 (INT_TIMER_M) mepc=0x... mtime=...` для каждого трапа.
 
 ### Запуск тестов
 

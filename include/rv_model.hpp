@@ -1,15 +1,18 @@
 #pragma once
 #include <cassert>
 #include <cstdint>
+#include <functional>
 #include <iomanip>
 #include <iostream>
 #include <optional>
 #include <stdexcept>
+#include <string>
 
 #include "alu.hpp"
 #include "config.hpp"
 #include "csr_file.hpp"
 #include "decoder.hpp"
+#include "disasm.hpp"
 #include "isa.hpp"
 #include "memory_model.hpp"
 #include "register_file.hpp"
@@ -122,9 +125,12 @@ public:
         }
 
         const DecodedInstr<XLEN> instr = Decoder<XLEN>::decode(raw);
+        const std::string        dis   = Disasm::disassemble(instr);
         if (debugMode_)
             std::cout << "[PC=0x" << std::hex << std::setw(8) << std::setfill('0') << pc_
-                      << std::dec << "] " << instr.toString() << "\n";
+                      << std::dec << "] " << dis << "\n";
+        if (step_hook_)
+            step_hook_(pc_, dis);
 
         const bool pcModified = executeInstr(instr);
         if (!pcModified)
@@ -172,6 +178,14 @@ public:
     }
     uint64_t instrCount() const { return instrCount_; }
     void     setDebug(bool on) { debugMode_ = on; }
+
+    // step hook: called before each instruction with (pc, disasm_string)
+    using StepHook = std::function<void(UWord, const std::string&)>;
+    void setStepHook(StepHook h) { step_hook_ = std::move(h); }
+
+    // trap hook: called on every fireTrap with (cause, mepc, mtval)
+    using TrapHook = std::function<void(UWord, UWord, UWord)>;
+    void setTrapHook(TrapHook h) { trap_hook_ = std::move(h); }
 
     // save/restore callee-saved registers + sp + ra + pc
     Context<XLEN> saveContext() const {
@@ -240,6 +254,8 @@ private:
     uint64_t           instrCount_;
     bool               debugMode_;
     PrivMode           priv_mode_;
+    StepHook           step_hook_;
+    TrapHook           trap_hook_;
 
     void advancePC() { pc_ += UWord(4); }
 
@@ -312,6 +328,8 @@ private:
     }
 
     void fireTrap(UWord cause, UWord tval = UWord(0)) {
+        if (trap_hook_)
+            trap_hook_(cause, pc_, tval);
         UWord mtvec = csr_.getMTVEC();
         if (mtvec == UWord(0)) {
             halted_ = true;
