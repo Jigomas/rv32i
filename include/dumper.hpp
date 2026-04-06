@@ -16,28 +16,47 @@ inline const char* causeName(uint32_t cause) {
     const uint32_t code   = cause & ~CSR::MCAUSE_INTERRUPT;
     if (is_int) {
         switch (code) {
-            case 3u:  return "INT_SW_M";
-            case 7u:  return "INT_TIMER_M";
-            case 11u: return "INT_EXT_M";
-            default:  return "INT_?";
+            case 3u:
+                return "INT_SW_M";
+            case 7u:
+                return "INT_TIMER_M";
+            case 11u:
+                return "INT_EXT_M";
+            default:
+                return "INT_?";
         }
     }
     switch (code) {
-        case CSR::EXC_INSN_MISALIGN:    return "EXC_INSN_MISALIGN";
-        case CSR::EXC_INSN_FAULT:       return "EXC_INSN_FAULT";
-        case CSR::EXC_ILLEGAL_INSN:     return "EXC_ILLEGAL_INSN";
-        case CSR::EXC_BREAKPOINT:       return "EXC_BREAKPOINT";
-        case CSR::EXC_LOAD_MISALIGN:    return "EXC_LOAD_MISALIGN";
-        case CSR::EXC_LOAD_FAULT:       return "EXC_LOAD_FAULT";
-        case CSR::EXC_STORE_MISALIGN:   return "EXC_STORE_MISALIGN";
-        case CSR::EXC_STORE_FAULT:      return "EXC_STORE_FAULT";
-        case CSR::EXC_ECALL_U:          return "EXC_ECALL_U";
-        case CSR::EXC_ECALL_S:          return "EXC_ECALL_S";
-        case CSR::EXC_ECALL_M:          return "EXC_ECALL_M";
-        case CSR::EXC_INSN_PAGE_FAULT:  return "EXC_INSN_PAGE_FAULT";
-        case CSR::EXC_LOAD_PAGE_FAULT:  return "EXC_LOAD_PAGE_FAULT";
-        case CSR::EXC_STORE_PAGE_FAULT: return "EXC_STORE_PAGE_FAULT";
-        default:                        return "EXC_?";
+        case CSR::EXC_INSN_MISALIGN:
+            return "EXC_INSN_MISALIGN";
+        case CSR::EXC_INSN_FAULT:
+            return "EXC_INSN_FAULT";
+        case CSR::EXC_ILLEGAL_INSN:
+            return "EXC_ILLEGAL_INSN";
+        case CSR::EXC_BREAKPOINT:
+            return "EXC_BREAKPOINT";
+        case CSR::EXC_LOAD_MISALIGN:
+            return "EXC_LOAD_MISALIGN";
+        case CSR::EXC_LOAD_FAULT:
+            return "EXC_LOAD_FAULT";
+        case CSR::EXC_STORE_MISALIGN:
+            return "EXC_STORE_MISALIGN";
+        case CSR::EXC_STORE_FAULT:
+            return "EXC_STORE_FAULT";
+        case CSR::EXC_ECALL_U:
+            return "EXC_ECALL_U";
+        case CSR::EXC_ECALL_S:
+            return "EXC_ECALL_S";
+        case CSR::EXC_ECALL_M:
+            return "EXC_ECALL_M";
+        case CSR::EXC_INSN_PAGE_FAULT:
+            return "EXC_INSN_PAGE_FAULT";
+        case CSR::EXC_LOAD_PAGE_FAULT:
+            return "EXC_LOAD_PAGE_FAULT";
+        case CSR::EXC_STORE_PAGE_FAULT:
+            return "EXC_STORE_PAGE_FAULT";
+        default:
+            return "EXC_?";
     }
 }
 
@@ -77,16 +96,15 @@ public:
         if (!trace_file_.is_open())
             return;
         trace_file_ << "[" << std::hex << std::setw(8) << std::setfill('0') << pc << "] " << disasm
-                  << "\n";
+                    << "\n";
     }
 
     // called on every fireTrap; mtime is passed from the simulator step loop
     void onTrap(UWord cause, UWord mepc, UWord mtval, uint64_t mtime = 0) {
-        trap_out_ << "!TRAP"
-                  << "  cause=0x" << std::hex << std::setw(8) << std::setfill('0') << cause << " ("
-                  << causeName(cause) << ")"
-                  << "  mepc=0x" << std::setw(8) << mepc << "  mtval=0x" << std::setw(8) << mtval
-                  << "  mtime=" << std::dec << mtime << "\n"
+        trap_out_ << "!TRAP" << "  cause=0x" << std::hex << std::setw(8) << std::setfill('0')
+                  << cause << " (" << causeName(cause) << ")" << "  mepc=0x" << std::setw(8) << mepc
+                  << "  mtval=0x" << std::setw(8) << mtval << "  mtime=" << std::dec << mtime
+                  << "\n"
                   << std::flush;
     }
 
@@ -94,11 +112,10 @@ public:
     void onTrapEtl(UWord cause, UWord mepc, UWord mtval, uint64_t mtime = 0) {
         if (!trace_file_.is_open())
             return;
-        trace_file_ << "!TRAP"
-                  << "  cause=0x" << std::hex << std::setw(8) << std::setfill('0') << cause << " ("
-                  << causeName(cause) << ")"
-                  << "  mepc=0x" << std::setw(8) << mepc << "  mtval=0x" << std::setw(8) << mtval
-                  << "  mtime=" << std::dec << mtime << "\n";
+        trace_file_ << "!TRAP" << "  cause=0x" << std::hex << std::setw(8) << std::setfill('0')
+                    << cause << " (" << causeName(cause) << ")" << "  mepc=0x" << std::setw(8)
+                    << mepc << "  mtval=0x" << std::setw(8) << mtval << "  mtime=" << std::dec
+                    << mtime << "\n";
     }
 
     void dumpState(const RegisterFile<XLEN>& regs, const CsrFile<XLEN>& csr, UWord pc) {
@@ -124,9 +141,15 @@ public:
             const char* name;
             uint16_t    addr;
         } entries[] = {
-            {"mstatus ", CSR::MSTATUS}, {"mie     ", CSR::MIE},      {"mtvec   ", CSR::MTVEC},
-            {"mscratch", CSR::MSCRATCH}, {"mepc    ", CSR::MEPC},    {"mcause  ", CSR::MCAUSE},
-            {"mtval   ", CSR::MTVAL},   {"mip     ", CSR::MIP},      {"satp    ", CSR::SATP},
+            {"mstatus ", CSR::MSTATUS},
+            {"mie     ", CSR::MIE},
+            {"mtvec   ", CSR::MTVEC},
+            {"mscratch", CSR::MSCRATCH},
+            {"mepc    ", CSR::MEPC},
+            {"mcause  ", CSR::MCAUSE},
+            {"mtval   ", CSR::MTVAL},
+            {"mip     ", CSR::MIP},
+            {"satp    ", CSR::SATP},
         };
         for (const auto& e : entries) {
             const UWord val = csr.read(e.addr);
@@ -193,6 +216,6 @@ public:
     }
 
 private:
-    std::ofstream  trace_file_;
-    std::ostream&  trap_out_;
+    std::ofstream trace_file_;
+    std::ostream& trap_out_;
 };

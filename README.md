@@ -220,3 +220,10 @@ cmake --build build-release -j$(nproc)
 - Невыровненный PC (не кратен 4)
 - Вызов `step()` на остановленном CPU
 - Передача неподдерживаемого расширения в `Config` (F/D/C)
+
+## Дорожная карта
+
+- [ ] TLB — кэш VPN→PPN в RVModel; SFENCE.VMA перестаёт быть NOP; добавлять вместе с per-process page tables
+- [ ] ELF-загрузчик
+- [ ] расширения F / D / C
+- [ ] WFI — idle ядро вместо busy-loop; нужна поддержка инструкции в симуляторе

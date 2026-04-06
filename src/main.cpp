@@ -130,7 +130,7 @@ static void run_os(const char* bin_path, bool debug, const std::string& trace_pa
 // usage: rv32i_cpu <bin> [--debug] [--trace <file.txt>]
 int main(int argc, char* argv[]) {
     if (argc >= 2 && argv[1][0] != '-') {
-        bool        debug    = false;
+        bool        debug = false;
         std::string trace_path;
         for (int i = 2; i < argc; ++i) {
             if (std::strcmp(argv[i], "--debug") == 0) {
