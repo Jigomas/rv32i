@@ -103,11 +103,13 @@ static void run_os(const char* bin_path, bool debug, const std::string& trace_pa
 
     Dumper<32> dbg(trace_path);
     cpu.setDebug(debug);
-    cpu.setStepHook([&](uint32_t pc, const std::string& dis) { dbg.onStep(pc, dis); });
-    cpu.setTrapHook([&](uint32_t cause, uint32_t mepc, uint32_t tval) {
-        dbg.onTrap(cause, mepc, tval, mtime);
-        dbg.onTrapEtl(cause, mepc, tval, mtime);
-    });
+    if (!trace_path.empty())
+        cpu.setStepHook([&](uint32_t pc, const std::string& dis) { dbg.onStep(pc, dis); });
+    if (debug || !trace_path.empty())
+        cpu.setTrapHook([&](uint32_t cause, uint32_t mepc, uint32_t tval) {
+            dbg.onTrap(cause, mepc, tval, mtime);
+            dbg.onTrapEtl(cause, mepc, tval, mtime);
+        });
 
     while (!cpu.isHalted()) {
         cpu.step();
