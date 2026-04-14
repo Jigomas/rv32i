@@ -86,8 +86,8 @@ public:
     RVModel& operator=(RVModel&&) = delete;
 
     void init(Addr startPC = 0, UWord stackPointer = 0) {
-        regs_       = RegisterFile<XLEN>();
-        csr_        = CsrFile<XLEN>();
+        regs_       = RegisterFile<XLEN>(); // flush registers
+        csr_        = CsrFile<XLEN>(); // flush csrs
         pc_         = startPC;
         halted_     = false;
         instrCount_ = 0;
